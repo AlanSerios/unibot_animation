@@ -2271,8 +2271,18 @@ function initFuse() {
 async function getUnibotResponse(input) {
     if (!fuseInstance) initFuse();
     
-    const text = input.trim();
+    let text = input.trim();
     if (!text) return "";
+    
+    // Strip his name so it doesn't skew the fuzzy match score (e.g., "how are you unibot" -> "how are you")
+    text = text.replace(/unibot/gi, '').trim();
+    
+    // If the user *only* typed his name, greet them!
+    if (!text) {
+        currentConversationTopic = null;
+        applyEmotion('happy');
+        return "YES? I AM UNIBOT. HOW CAN I HELP YOU TODAY?";
+    }
     
     // 1. Exact Math Check
     try {
