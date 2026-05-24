@@ -1,28 +1,44 @@
-# Unibot Studio
+# Unibot Studio: Emotion Matrix Synthesizer
 
-A web-based visualizer and emotion matrix synthesizer for Unibot. This project features dynamic SVG vector animations and a high-end UI designed with a premium compact aesthetic.
+![Live Demo](https://img.shields.io/badge/Live_Demo-View_Site-blue?style=for-the-badge)  
+**[https://unibot-animation.vercel.app/](https://unibot-animation.vercel.app/)**
 
-## Features
-- **Emotion Synthesis:** Smooth crossfade transitions between complex neural states.
-- **Export Capabilities:** 
-  - Download high-fidelity SVG vector frames for each emotion.
-  - Native in-browser GIF recording of the transition cascade.
-- **Visuals:** Features complex ambient lighting, CSS-accelerated hardware rendering, and a glassmorphic command panel.
-- **Compact UI:** Mathematically shrunken viewport architecture for "pro-max" dashboard density.
+Unibot Studio is a cutting-edge, web-based visualizer designed to synthesize, preview, and export high-fidelity neural states (facial emotions) for the Unibot system. 
 
-## Deployment
-This static web application requires no build step.
+It uses raw dynamic SVG injection to recreate complex face animations natively in the browser, providing a seamless visual bridge between cognitive baseline states and target emotions.
 
-To deploy on **Vercel**:
-1. Connect your GitHub repository to Vercel.
-2. Vercel will automatically detect the static project.
-3. The `vercel.json` file ensures that the root URL (`/`) automatically serves `code.html`.
+## 🚀 Key Features
 
-## Local Development
-Since the project relies on dynamically downloading SVGs via JavaScript Blobs and inline web workers, you should serve it over a local HTTP server instead of double-clicking the HTML file directly.
+* **Live Matrix Synthesis:** Watch real-time transition cascades as Unibot morphs between different emotional states (e.g., from *Happy* to *Furious*) with staggered delays, bouncy timeline effects, and smooth crossfades.
+* **SVG Vector Extraction:** Natively extracts and downloads the exact, perfectly parsed raw SVG XML of both the baseline emotion and the synthesized target emotion directly from the live DOM memory.
+* **Built-in GIF Rendering:** Includes an internal background frame recorder that snapshots the HTML DOM at 15 Frames Per Second during the synthesis phase. It perfectly captures the initial matrix shake, the timeline cascade, and the final bouncy result into a downloadable `.gif` format.
+* **Pro-Max Compact Architecture:** A meticulously balanced, "dashboard density" frontend built with Tailwind CSS. It features ambient responsive glowing elements, glassmorphic (`backdrop-blur`) UI panels, hardware-accelerated CSS properties, and custom asymmetric grid structures designed to sit beautifully on high-resolution screens.
+
+## 🛠 Tech Stack
+
+* **Structure:** Pure HTML5, Vanilla JavaScript.
+* **Styling:** Tailwind CSS (via CDN for raw rapid iteration), Custom Keyframe CSS.
+* **Animation Engine:** [Anime.js](https://animejs.com/) for choreographed sequencing, springing physics, and multi-step timeline animations.
+* **Export Engines:** `gif.js` with background Web Workers for smooth GIF encoding without blocking the main UI thread.
+* **Deployment:** Zero-build static architecture. Served globally via [Vercel](https://vercel.com).
+
+## 📂 Project Architecture
+
+* `code.html`: The core application matrix (HTML structure, JS logic, and SVG/GIF rendering loops).
+* `assets.js`: A massive dictionary of base SVG vectors and raw node structures loaded dynamically into the DOM.
+* `vercel.json`: Strict routing configuration ensuring the root domain safely points to `code.html`.
+
+## 🌐 Quick Start
+
+You don't need `npm` or `node_modules` to run the visualizer. Simply serve the files over any local HTTP server:
 
 ```bash
-# Example using Python
+# Clone the repository
+git clone https://github.com/yourusername/uni_animation.git
+cd uni_animation
+
+# Start a local python web server
 python -m http.server 8000
 ```
-Then navigate to `http://localhost:8000/code.html`
+
+Then open `http://localhost:8000/code.html` in your browser.
