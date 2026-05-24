@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNIBOT Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <script src="assets.js"></script>
+    <style>
+        :root {
+            --charcoal: #18181B;
+            --surface: #FFFFFF;
+            --muted: #71717A;
+            --accent: #3b82f6;
+        }
+
+        body { 
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: var(--charcoal); 
+            color: #F9FAFB; 
+        }
+        
+        .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.015);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(226, 232, 240, 0.05);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+        }
+        
+        .emotion-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(226, 232, 240, 0.05);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .emotion-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateX(4px);
+        }
+        
+        .emotion-active {
+            border-color: var(--accent) !important;
+            background: rgba(59, 130, 246, 0.05) !important;
+        }
+        
+        .emotion-active .icon {
+            color: var(--accent);
+        }
+
+        .emotion-inactive { opacity: 0.4; }
+        
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+        
+        .robot-zoom {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transform-origin: bottom center;
+            max-height: 85%;
+        }
+
+        /* Hardware acceleration */
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+    </style>
+
+    <!-- Export Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <style>
+      @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-[100dvh] flex flex-col p-4 md:p-6 overflow-hidden selection:bg-blue-500/30">
+
+    <header class="flex justify-between items-center mb-2 z-20 relative px-4">
+        <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                <span class="material-symbols-outlined text-white text-base" data-icon="smart_toy">smart_toy</span>
+            </div>
+            <h1 class="text-base font-semibold tracking-wide">UNIBOT</h1>
+        </div>
+        <div class="hidden md:flex items-center gap-6 text-xs text-zinc-400 font-medium tracking-widest uppercase">
+            <span class="hover:text-white transition-colors cursor-pointer">Archive</span>
+            <span class="text-white border-b border-white pb-1 cursor-pointer">Visualizer</span>
+            <span class="hover:text-white transition-colors cursor-pointer">Systems</span>
+        </div>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 relative z-10 max-w-[900px] mx-auto w-full">
+        
+        <!-- Asymmetric Split: 8 cols for display, 4 cols for controls -->
+        <div class="lg:col-span-8 glass-panel rounded-[2.5rem] relative overflow-hidden flex flex-col items-center justify-end min-h-[350px]">
+            <!-- Ambient Glow -->
+            <div id="ambient-glow" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] h-[70%] bg-blue-500/10 blur-[120px] rounded-full transition-colors duration-1000"></div>
+            
+            <canvas id="pixi-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-15"></canvas>
+            
+            <div id="robot-wrapper" class="absolute inset-0 w-full h-full flex items-end justify-center overflow-visible z-10 opacity-0 pb-12">
+            </div>
+
+            <!-- Loader Overlay -->
+            <div id="generating-overlay" class="absolute inset-0 bg-[#18181B]/80 backdrop-blur-xl z-20 flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-500">
+                <div class="text-center">
+                    <h2 class="text-[9px] font-semibold tracking-[0.2em] text-zinc-400 uppercase mb-6" id="step-subtitle">Synthesizing State</h2>
+                    <div class="w-64 h-[2px] bg-white/10 overflow-hidden relative">
+                        <div id="progress-bar" class="absolute top-0 left-0 h-full bg-blue-500 w-0"></div>
+                    </div>
+                    <div class="mt-8 text-white/50 mono-font text-[9px] tracking-widest" id="matrix-text">AWAITING MATRIX...</div>
+                </div>
+            </div>
+            
+            <!-- Context Label -->
+            <div class="absolute bottom-6 left-6 z-30">
+                <p class="mono-font text-[9px] text-zinc-500 tracking-widest uppercase mb-2">NEURAL STATE</p>
+                <h2 id="active-emotion-label" class="text-2xl font-light tracking-tight text-white">Happy</h2>
+            </div>
+        </div>
+
+        <div class="lg:col-span-4 flex flex-col gap-4">
+            <div class="pt-8 flex flex-col justify-start relative z-10">
+                <h2 id="step-title" class="text-xl font-medium tracking-tight leading-[1.1] mb-5">Select initial<br/>parameters.</h2>
+                <p class="text-zinc-400 text-xs leading-relaxed max-w-[40ch]">Define the cognitive baseline for Unibot's neural matrix before initializing the transformation cascade.</p>
+            </div>
+
+            
+
+            <div id="action-area" class="glass-panel rounded-[2rem] p-3 flex flex-col flex-1 max-h-[350px] overflow-hidden">
+                <div id="emotion-track" class="grid grid-cols-2 gap-2 mb-6 flex-1 overflow-y-auto pr-1" style="scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent">
+                    <div class="emotion-item emotion-inactive p-2 rounded-lg flex items-center gap-2 cursor-pointer" data-emotion="neutral">
+                        <span class="icon material-symbols-outlined text-base text-zinc-400 transition-colors">radio_button_unchecked</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Neutral</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="happy">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_satisfied</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Happy</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="glee">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_very_satisfied</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Glee</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="excited">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">celebration</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Excited</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="surprised">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_stressed</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Surprised</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="awe">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">auto_awesome</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Awe</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="sad_down">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_dissatisfied</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Sad</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="sad_up">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_sad</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Sad (Up)</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="worried">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_worried</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Worried</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="scared">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">emergency</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Scared</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="angry">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">mood_bad</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Angry</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="furious">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">whatshot</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Furious</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="annoyed">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_frustrated</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Annoyed</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="frustrated">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_extremely_dissatisfied</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Frustrated</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="confused">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">psychology_alt</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Confused</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="skeptic">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">help</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Skeptic</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="focused">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">target</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Focused</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="suspicious">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">visibility</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Suspicious</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="squint">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">visibility_off</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Squint</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="unimpressed">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">sentiment_neutral</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Unimpressed</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="sleepy">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">bedtime</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Sleepy</span>
+                    </div>
+                    <div class="emotion-item emotion-inactive p-2.5 rounded-xl flex items-center gap-2.5 cursor-pointer" data-emotion="happy_wave">
+                        <span class="icon material-symbols-outlined text-lg text-zinc-400 transition-colors">waving_hand</span>
+                        <span class="text-[8px] uppercase tracking-widest font-medium text-zinc-300">Wave</span>
+                    </div>
+                </div>
+
+                <button id="primary-action-btn" class="w-full py-2 bg-white text-[#18181B] hover:bg-zinc-200 rounded-xl text-sm font-semibold tracking-widest uppercase transition-all duration-300 active:translate-y-[1px] opacity-0 pointer-events-none shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+                    Confirm Baseline
+                </button>
+                <div id="result-options-area" class="hidden flex-col gap-3 mt-4">
+                    <button id="btn-download-svgs" class="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-sm font-semibold tracking-widest uppercase transition-all flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined">imagesmode</span> Download SVGs
+                    </button>
+                    <button id="btn-record-gif" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold tracking-widest uppercase transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                        <span class="material-symbols-outlined">gif_box</span> Download GIF
+                    </button>
+                    <button id="btn-restart-matrix" class="w-full py-2 bg-white text-[#18181B] hover:bg-zinc-200 rounded-xl text-sm font-semibold tracking-widest uppercase transition-all mt-2 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+                        Restart Matrix
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script>
+        const emotions = {
+            neutral:     { label: "Neutral",       glow: "rgba(161, 161, 170, 0.08)" },
+            happy:       { label: "Happy",         glow: "rgba(59, 130, 246, 0.08)" },
+            glee:        { label: "Glee",          glow: "rgba(96, 165, 250, 0.10)" },
+            excited:     { label: "Excited",       glow: "rgba(234, 179, 8, 0.08)" },
+            surprised:   { label: "Surprised",     glow: "rgba(251, 191, 36, 0.08)" },
+            awe:         { label: "Awe",           glow: "rgba(139, 92, 246, 0.10)" },
+            sad_down:    { label: "Sad",           glow: "rgba(99, 102, 241, 0.08)" },
+            sad_up:      { label: "Sad (Looking Up)", glow: "rgba(99, 102, 241, 0.08)" },
+            worried:     { label: "Worried",       glow: "rgba(192, 132, 252, 0.08)" },
+            scared:      { label: "Scared",        glow: "rgba(248, 113, 113, 0.10)" },
+            angry:       { label: "Angry",         glow: "rgba(239, 68, 68, 0.08)" },
+            furious:     { label: "Furious",       glow: "rgba(220, 38, 38, 0.12)" },
+            annoyed:     { label: "Annoyed",       glow: "rgba(251, 146, 60, 0.08)" },
+            frustrated:  { label: "Frustrated",    glow: "rgba(234, 88, 12, 0.08)" },
+            confused:    { label: "Confused",      glow: "rgba(168, 85, 247, 0.08)" },
+            skeptic:     { label: "Skeptic",       glow: "rgba(148, 163, 184, 0.08)" },
+            focused:     { label: "Focused",       glow: "rgba(14, 165, 233, 0.08)" },
+            suspicious:  { label: "Suspicious",    glow: "rgba(245, 158, 11, 0.08)" },
+            squint:      { label: "Squint",        glow: "rgba(161, 161, 170, 0.06)" },
+            unimpressed: { label: "Unimpressed",   glow: "rgba(113, 113, 122, 0.08)" },
+            sleepy:      { label: "Sleepy",        glow: "rgba(99, 102, 241, 0.06)" },
+            happy_wave:  { label: "Friendly Wave", glow: "rgba(34, 197, 94, 0.08)" }
+        };
+
+        const robotWrapper = document.getElementById('robot-wrapper');
+        const label = document.getElementById('active-emotion-label');
+        const glow = document.getElementById('ambient-glow');
+        const emotionItems = document.querySelectorAll('.emotion-item');
+        
+        const stepTitle = document.getElementById('step-title');
+        const stepSubtitle = document.getElementById('step-subtitle');
+        const actionBtn = document.getElementById('primary-action-btn');
+        const generatingOverlay = document.getElementById('generating-overlay');
+        const progressBar = document.getElementById('progress-bar');
+        const emotionTrack = document.getElementById('emotion-track');
+        const matrixText = document.getElementById('matrix-text');
+
+        let appState = 'SELECT_BEFORE'; 
+        let beforeEmotion = null;
+        let afterEmotion = null;
+        let currentSelected = null;
+        let activeAnimations = [];
+        let recordedFrames = [];
+        let recordingInterval = null;
+        let capturedBeforeSVG = '';
+        let capturedAfterSVG = '';
+
+        // PixiJS Setup
+        const pixiCanvas = document.getElementById('pixi-canvas');
+        const app = new PIXI.Application({
+            view: pixiCanvas,
+            resizeTo: pixiCanvas.parentElement,
+            transparent: true,
+            backgroundAlpha: 0,
+            antialias: true
+        });
+        
+        const particlesContainer = new PIXI.ParticleContainer(1500, {
+            scale: true,
+            position: true,
+            rotation: true,
+            uvs: true,
+            alpha: true
+        });
+        app.stage.addChild(particlesContainer);
+        
+        let particles = [];
+        
+        const particleGraphic = new PIXI.Graphics();
+        particleGraphic.beginFill(0xffffff);
+        particleGraphic.drawCircle(0, 0, 5);
+        particleGraphic.endFill();
+        const particleTexture = app.renderer.generateTexture(particleGraphic);
+
+        function triggerParticles(colorHex, count = 50, burstType = 'explode') {
+            for (let i = 0; i < count; i++) {
+                const p = new PIXI.Sprite(particleTexture);
+                p.anchor.set(0.5);
+                
+                if (burstType === 'explode') {
+                    p.x = app.screen.width / 2;
+                    p.y = app.screen.height / 2;
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 12 + 5;
+                    p.vx = Math.cos(angle) * speed;
+                    p.vy = Math.sin(angle) * speed - 5; 
+                } else if (burstType === 'steam') {
+                    p.x = (app.screen.width / 2) + (Math.random() * 100 - 50);
+                    p.y = (app.screen.height / 2) - 50;
+                    p.vx = Math.random() * 2 - 1;
+                    p.vy = -(Math.random() * 5 + 3); 
+                } else if (burstType === 'dizzy') {
+                    p.x = (app.screen.width / 2) + Math.cos(i) * 100;
+                    p.y = (app.screen.height / 2) - 150 + Math.sin(i) * 30;
+                    p.vx = Math.cos(i + 1.5) * 4;
+                    p.vy = Math.sin(i + 1.5) * 4;
+                }
+
+                p.tint = colorHex;
+                p.alpha = Math.random() * 0.8 + 0.2;
+                p.scale.set(Math.random() * 0.5 + 0.2);
+                
+                p.life = 1.0;
+                particles.push({ sprite: p, vx: p.vx, vy: p.vy, type: burstType });
+                particlesContainer.addChild(p);
+            }
+        }
+
+        app.ticker.add(() => {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.sprite.x += p.vx;
+                p.sprite.y += p.vy;
+                
+                if (p.type === 'explode') {
+                    p.vy += 0.2; 
+                    p.sprite.alpha -= 0.015;
+                } else if (p.type === 'steam') {
+                    p.sprite.alpha -= 0.02;
+                    p.sprite.scale.x += 0.01;
+                    p.sprite.scale.y += 0.01;
+                } else if (p.type === 'dizzy') {
+                    p.sprite.alpha -= 0.005;
+                }
+                
+                if (p.sprite.alpha <= 0) {
+                    particlesContainer.removeChild(p.sprite);
+                    particles.splice(i, 1);
+                }
+            }
+        });
+
+        // Perpetual ambient breathing (Spring physics)
+        anime({
+            targets: robotWrapper,
+            translateY: [-8, 8],
+            duration: 2500,
+            loop: true,
+            direction: 'alternate',
+            easing: 'easeInOutQuad'
+        });
+
+        let currentEyeAnims = [];
+
+        function setupSVGAnimations(svg, emotionKey) {
+            // Stop previous specific animations
+            activeAnimations.forEach(a => a.pause());
+            activeAnimations = [];
+            currentEyeAnims.forEach(a => a.pause());
+            currentEyeAnims = [];
+
+            const paths = Array.from(svg.querySelectorAll('path, ellipse, rect'));
+
+            // --- HIDE ALL NATIVE EYES & FACIAL FEATURES ---
+            // The SVGs contain both dark-filled (#27282b) resting eye paths AND
+            // white-filled (#f2f2f2) eye paths that are the VISIBLE original eyes.
+            // We must hide ALL of them so our custom animated eyes are the only ones visible.
+            const allPaths = Array.from(svg.querySelectorAll('path'));
+            allPaths.forEach(p => {
+                const fill = (p.getAttribute('fill') || '').toLowerCase();
+                // Hide dark eye fills (resting state eyes)
+                if (fill === '#27282b' || fill === '#1a1a1a' || fill === '#000000') {
+                    p.style.opacity = '0';
+                }
+                // Hide white eye fills (#f2f2f2) that sit within the face screen area
+                // These are the original SVG eyes we want to replace
+                if (fill === '#f2f2f2' || fill === '#ffffff') {
+                    // Check if this white path is inside the face screen area
+                    // by looking at its parent group transforms
+                    let node = p;
+                    while (node && node.tagName !== 'svg') {
+                        const transform = node.getAttribute && node.getAttribute('transform');
+                        if (transform) {
+                            const m = transform.match(/matrix\([^,]+,[^,]+,[^,]+,[^,]+,\s*([^,]+),\s*([^)]+)\)/);
+                            if (m) {
+                                const tx = parseFloat(m[1]);
+                                const ty = parseFloat(m[2]);
+                                // Face screen area eye groups are positioned roughly at:
+                                // Left eye: tx ~362-432, ty ~234-297
+                                // Right eye: tx ~444-514, ty ~234-297
+                                if (tx > 330 && tx < 550 && ty > 200 && ty < 320) {
+                                    p.style.opacity = '0';
+                                    break;
+                                }
+                            }
+                        }
+                        node = node.parentNode;
+                    }
+                }
+            });
+
+            // Remove any previously injected custom faces
+            svg.querySelectorAll('.custom-vector-face').forEach(f => f.remove());
+            svg.querySelectorAll('.confused-mark').forEach(q => q.remove());
+            svg.querySelectorAll('.shine-effect').forEach(s => s.remove());
+
+            // Blue body paths (for color pulse effects)
+            const bluePaths = paths.filter(p => {
+                const fill = (p.getAttribute('fill') || '').toLowerCase();
+                return fill === '#337dd2' || fill === '#255796' || fill === '#245898';
+            });
+            bluePaths.forEach(p => {
+                if (!p.getAttribute('data-og-fill')) {
+                    p.setAttribute('data-og-fill', p.getAttribute('fill'));
+                }
+                anime.set(p, { fill: p.getAttribute('data-og-fill') });
+            });
+
+            anime.set(svg, { rotateZ: 0, translateX: 0, translateY: 0 });
+
+            // ═══════════════════════════════════════════════════════════
+            //  COZMO-STYLE EYE SYSTEM — Pure shape expression
+            //  No pupils, no mouths, no extras. Eyes ARE the emotion.
+            // ═══════════════════════════════════════════════════════════
+
+            const faceGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            faceGroup.classList.add('custom-vector-face');
+
+            // --- Helper: rounded-rect eye path ---
+            function makeRoundedRectEye(cx, cy, halfW, halfH, radius) {
+                const x = cx - halfW;
+                const y = cy - halfH;
+                const w = halfW * 2;
+                const h = halfH * 2;
+                const r = Math.min(radius, halfW, halfH);
+                return `M ${x + r} ${y} L ${x + w - r} ${y} Q ${x + w} ${y} ${x + w} ${y + r} L ${x + w} ${y + h - r} Q ${x + w} ${y + h} ${x + w - r} ${y + h} L ${x + r} ${y + h} Q ${x} ${y + h} ${x} ${y + h - r} L ${x} ${y + r} Q ${x} ${y} ${x + r} ${y} Z`;
+            }
+
+            // --- Helper: happy arc eye (^ ^) ---
+            function makeHappyArc(cx, cy, halfW, halfH) {
+                const x1 = cx - halfW;
+                const x2 = cx + halfW;
+                const yBase = cy + halfH * 0.3;
+                const yPeak = cy - halfH;
+                const cpY = cy - halfH * 1.6;
+                return `M ${x1} ${yBase} Q ${cx} ${cpY} ${x2} ${yBase} Q ${cx} ${yBase - halfH * 0.2} ${x1} ${yBase} Z`;
+            }
+
+            // --- Helper: blink path (thin horizontal line) ---
+            function makeBlinkLine(cx, cy, halfW) {
+                return makeRoundedRectEye(cx, cy, halfW, 1.5, 1.5);
+            }
+
+            // Eye positions
+            const leftCx = 400, rightCx = 478, eyeCy = 264;
+
+            // Default (resting) eye shape used as morphing "from" state
+            const restingLeft = makeRoundedRectEye(leftCx, eyeCy, 25, 22, 18);
+            const restingRight = makeRoundedRectEye(rightCx, eyeCy, 25, 22, 18);
+
+            // Create the two eye path elements
+            const leftEye = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            leftEye.setAttribute("d", restingLeft);
+            leftEye.setAttribute("fill", "#f2f2f2");
+            leftEye.style.transformBox = "fill-box";
+            leftEye.style.transformOrigin = "50% 50%";
+
+            const rightEye = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            rightEye.setAttribute("d", restingRight);
+            rightEye.setAttribute("fill", "#f2f2f2");
+            rightEye.style.transformBox = "fill-box";
+            rightEye.style.transformOrigin = "50% 50%";
+
+            faceGroup.appendChild(leftEye);
+            faceGroup.appendChild(rightEye);
+
+            // ═══════════════════════════════════════════════════════════════
+            //  PER-EMOTION EYE SHAPES + ANIMATIONS
+            //  Each emotion defines: eye shape, tilt, entrance, blink, idle
+            // ═══════════════════════════════════════════════════════════════
+
+            // --- Universal blink helper ---
+            function startBlinkCycle(targets, minDelay, maxDelay, blinkDur, openDur) {
+                function doBlink() {
+                    const delay = Math.random() * (maxDelay - minDelay) + minDelay;
+                    const bTL = anime.timeline({ easing: 'easeInOutQuad' });
+                    bTL
+                        .add({ targets: targets, scaleY: 0.05, duration: blinkDur || 80, delay: delay })
+                        .add({ targets: targets, scaleY: 1, duration: openDur || 120, easing: 'easeOutBack', complete: () => { doBlink(); } });
+                    activeAnimations.push(bTL);
+                }
+                doBlink();
+            }
+
+            // --- Universal gaze helper ---
+            function startGaze(target, steps, loopDuration) {
+                const tl = anime.timeline({ loop: true, easing: 'easeInOutSine' });
+                steps.forEach(s => tl.add({ targets: target, ...s }));
+                activeAnimations.push(tl);
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║            NEUTRAL                    ║
+            // ╚═══════════════════════════════════════╝
+            if (emotionKey === 'neutral') {
+                // Default rounded rect eyes — relaxed, calm
+                startBlinkCycle([leftEye, rightEye], 3000, 6000);
+                startGaze(faceGroup, [
+                    { translateX: -3, translateY: 1, duration: 1500, delay: 3000 },
+                    { translateX: 0, translateY: 0, duration: 1000 },
+                    { translateX: 3, translateY: -1, duration: 1500, delay: 3500 },
+                    { translateX: 0, translateY: 0, duration: 1000 }
+                ]);
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║         HAPPY / HAPPY_WAVE            ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'happy' || emotionKey === 'happy_wave') {
+                const targetLeft = makeHappyArc(leftCx, eyeCy, 25, 20);
+                const targetRight = makeHappyArc(rightCx, eyeCy, 25, 20);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 400, easing: 'spring(1, 80, 10, 0)' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 400, easing: 'spring(1, 80, 10, 0)' }));
+                startBlinkCycle([leftEye, rightEye], 2000, 6000);
+                startGaze(faceGroup, [
+                    { translateX: -4, translateY: 1, duration: 1200, delay: 2000 },
+                    { translateX: 0, translateY: 0, duration: 800 },
+                    { translateX: 4, translateY: -1, duration: 1200, delay: 2500 },
+                    { translateX: 0, translateY: 0, duration: 800 }
+                ]);
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleX: [1, 1.03], scaleY: [1, 0.96], duration: 3000, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║              GLEE                     ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'glee') {
+                // Super squished happy arcs — extreme joy
+                const targetLeft = makeHappyArc(leftCx, eyeCy + 4, 28, 16);
+                const targetRight = makeHappyArc(rightCx, eyeCy + 4, 28, 16);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 300, easing: 'spring(1, 100, 12, 0)' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 300, easing: 'spring(1, 100, 12, 0)' }));
+                // Glee eyes don't blink — they're SO happy they stay squished
+                // Bouncy pulse
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleX: [1, 1.08], scaleY: [1, 0.9], duration: 400, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+                // Joyful jitter
+                activeAnimations.push(anime({ targets: faceGroup, translateX: () => anime.random(-1, 1), translateY: () => anime.random(-1, 1), duration: 100, loop: true, direction: 'alternate', easing: 'linear' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║           EXCITED                     ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'excited') {
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy, 27, 35, 24);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy, 27, 35, 24);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 300, easing: 'spring(1, 100, 12, 0)' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 300, easing: 'spring(1, 100, 12, 0)' }));
+                startBlinkCycle([leftEye, rightEye], 3000, 7000, 60, 100);
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 1.1], scaleX: [1, 1.05], duration: 500, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+                activeAnimations.push(anime({ targets: faceGroup, translateX: () => anime.random(-1, 1), translateY: () => anime.random(-1, 1), duration: 80, loop: true, direction: 'alternate', easing: 'linear' }));
+                const saccadeTL = anime.timeline({ loop: true, easing: 'easeOutQuad' });
+                saccadeTL
+                    .add({ targets: faceGroup, translateX: 5, translateY: -2, duration: 100, delay: 500 })
+                    .add({ targets: faceGroup, translateX: -4, translateY: 2, duration: 80 })
+                    .add({ targets: faceGroup, translateX: 0, translateY: 0, duration: 200, easing: 'easeInOutSine' })
+                    .add({ targets: faceGroup, translateX: -5, translateY: -1, duration: 90, delay: 700 })
+                    .add({ targets: faceGroup, translateX: 3, translateY: 3, duration: 70 })
+                    .add({ targets: faceGroup, translateX: 0, translateY: 0, duration: 250, easing: 'easeInOutSine' });
+                activeAnimations.push(saccadeTL);
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║          SURPRISED                    ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'surprised') {
+                // Very large, round eyes — wider and taller than excited
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy, 30, 32, 28);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy, 30, 32, 28);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 120, easing: 'easeOutBack' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 120, easing: 'easeOutBack' }));
+                startBlinkCycle([leftEye, rightEye], 4000, 8000, 50, 80);
+                // Slight startle jitter then still
+                activeAnimations.push(anime({ targets: faceGroup, translateY: [0, -3, 0], duration: 200, easing: 'easeOutQuad' }));
+                // Eyes stay wide — subtle pulse
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 1.04], scaleX: [1, 1.02], duration: 1500, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║              AWE                      ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'awe') {
+                // Large round eyes looking slightly upward
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy - 4, 28, 30, 26);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy - 4, 28, 30, 26);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 500, easing: 'spring(1, 60, 8, 0)' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 500, easing: 'spring(1, 60, 8, 0)' }));
+                startBlinkCycle([leftEye, rightEye], 5000, 9000, 70, 150);
+                // Slow upward gaze drift
+                activeAnimations.push(anime({ targets: faceGroup, translateY: [0, -3, -2], duration: 3000, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+                // Gentle breathing
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 1.03], duration: 2500, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║         SAD (LOOKING DOWN)             ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'sad_down') {
+                // Droopy eyes: narrower with rounded corners, shifted down
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 6, 24, 16, 14);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 6, 24, 16, 14);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 600, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 600, easing: 'easeOutQuad' }));
+                // Eyes tilt outward slightly (/ \) — sadness
+                anime.set(leftEye, { rotateZ: -5 });
+                anime.set(rightEye, { rotateZ: 5 });
+                startBlinkCycle([leftEye, rightEye], 2000, 5000, 100, 200);
+                // Looking down
+                activeAnimations.push(anime({ targets: faceGroup, translateY: 4, duration: 800, easing: 'easeOutQuad' }));
+                // Slow droop
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.92, 1], duration: 4000, loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║        SAD (LOOKING UP TO USER)        ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'sad_up') {
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy - 4, 24, 18, 14);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy - 4, 24, 18, 14);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 600, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 600, easing: 'easeOutQuad' }));
+                anime.set(leftEye, { rotateZ: -5 });
+                anime.set(rightEye, { rotateZ: 5 });
+                startBlinkCycle([leftEye, rightEye], 2500, 5500, 100, 200);
+                // Looking up at user
+                activeAnimations.push(anime({ targets: faceGroup, translateY: -4, duration: 800, easing: 'easeOutQuad' }));
+                // Subtle pleading wobble
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.95, 1.02, 1], duration: 3500, loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║           WORRIED                     ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'worried') {
+                // Eyes tilted outward (/ \) — opposite of angry
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy, 24, 20, 16);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy, 24, 20, 16);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 400, easing: 'spring(1, 60, 10, 0)' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 400, easing: 'spring(1, 60, 10, 0)' }));
+                anime.set(leftEye, { rotateZ: -10 });
+                anime.set(rightEye, { rotateZ: 10 });
+                startBlinkCycle([leftEye, rightEye], 2000, 4500, 90, 140);
+                // Nervous glancing
+                startGaze(faceGroup, [
+                    { translateX: -3, translateY: 2, duration: 600, delay: 800 },
+                    { translateX: 2, translateY: -1, duration: 500 },
+                    { translateX: 0, translateY: 0, duration: 400 },
+                    { translateX: -2, translateY: -2, duration: 500, delay: 600 },
+                    { translateX: 0, translateY: 0, duration: 400 }
+                ]);
+                // Tremor
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.94, 1, 0.96], duration: 600, loop: true, easing: 'steps(3)' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║            SCARED                     ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'scared') {
+                // Wide, tall eyes — similar to surprised but with trembling
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy, 26, 30, 22);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy, 26, 30, 22);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 100, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 100, easing: 'easeOutQuad' }));
+                startBlinkCycle([leftEye, rightEye], 1500, 3500, 50, 80);
+                // Constant trembling
+                activeAnimations.push(anime({ targets: faceGroup, translateX: () => anime.random(-2, 2), translateY: () => anime.random(-1, 1), duration: 60, loop: true, direction: 'alternate', easing: 'linear' }));
+                // Shrinking/growing fear pulse
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.88, 1.05, 1], scaleX: [1, 1.03, 0.97, 1], duration: 800, loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║           ANGRY (was MAD)             ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'angry' || emotionKey === 'mad') {
+                const halfW = 28, halfH = 25, rad = 8;
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 2, halfW, halfH, rad);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 2, halfW, halfH, rad);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 150, easing: 'easeInQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 150, easing: 'easeInQuad' }));
+                anime.set(leftEye, { rotateZ: 8 });
+                anime.set(rightEye, { rotateZ: -8 });
+                // Brow overlay
+                const brow = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+                const browLeft = leftCx - halfW - 8, browRight = rightCx + halfW + 8;
+                const browMidX = (leftCx + rightCx) / 2, browTopY = eyeCy - halfH - 20, browMidY = eyeCy - 2, browSideY = eyeCy - 12;
+                brow.setAttribute("points", `${browLeft},${browTopY} ${browRight},${browTopY} ${browRight},${browSideY} ${browMidX},${browMidY} ${browLeft},${browSideY}`);
+                brow.setAttribute("fill", "#255796");
+                brow.style.transformOrigin = `${browMidX}px ${browMidY}px`;
+                faceGroup.appendChild(brow);
+                startBlinkCycle([leftEye, rightEye], 3000, 8000, 60, 100);
+                // Brow slam
+                const browSlamTL = anime.timeline({ loop: true, easing: 'easeInOutQuad' });
+                browSlamTL
+                    .add({ targets: brow, translateY: 6, duration: 100, delay: 600, easing: 'easeInQuad' })
+                    .add({ targets: brow, translateY: 0, duration: 200, easing: 'spring(1, 120, 14, 0)' })
+                    .add({ targets: brow, translateY: 4, duration: 80, delay: 400, easing: 'easeInQuad' })
+                    .add({ targets: brow, translateY: 0, duration: 180, easing: 'spring(1, 100, 12, 0)' });
+                activeAnimations.push(browSlamTL);
+                // Eye tension
+                const tenseTL = anime.timeline({ loop: true, easing: 'easeInOutQuad' });
+                tenseTL
+                    .add({ targets: [leftEye, rightEye], scaleY: 0.85, scaleX: 1.05, duration: 200, delay: 1500 })
+                    .add({ targets: [leftEye, rightEye], scaleY: 1, scaleX: 1, duration: 300, easing: 'spring(1, 80, 10, 0)' });
+                activeAnimations.push(tenseTL);
+                // Lock-on gaze
+                startGaze(faceGroup, [
+                    { translateX: -5, translateY: 1, duration: 80, delay: 400 },
+                    { translateX: -5, translateY: 1, duration: 600 },
+                    { translateX: 6, translateY: -1, duration: 60, easing: 'easeInQuad' },
+                    { translateX: 6, translateY: -1, duration: 500 },
+                    { translateX: 0, translateY: 0, duration: 120, delay: 300 }
+                ]);
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║            FURIOUS                    ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'furious') {
+                // MORE extreme angry — tighter, more covered, more shake
+                const halfW = 30, halfH = 22, rad = 6;
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 4, halfW, halfH, rad);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 4, halfW, halfH, rad);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 80, easing: 'easeInQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 80, easing: 'easeInQuad' }));
+                anime.set(leftEye, { rotateZ: 12 });
+                anime.set(rightEye, { rotateZ: -12 });
+                // Heavier brow — covers more
+                const brow = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+                const browLeft = leftCx - halfW - 10, browRight = rightCx + halfW + 10;
+                const browMidX = (leftCx + rightCx) / 2, browTopY = eyeCy - halfH - 25, browMidY = eyeCy + 4, browSideY = eyeCy - 6;
+                brow.setAttribute("points", `${browLeft},${browTopY} ${browRight},${browTopY} ${browRight},${browSideY} ${browMidX},${browMidY} ${browLeft},${browSideY}`);
+                brow.setAttribute("fill", "#255796");
+                brow.style.transformOrigin = `${browMidX}px ${browMidY}px`;
+                faceGroup.appendChild(brow);
+                startBlinkCycle([leftEye, rightEye], 5000, 10000, 40, 80);
+                // Rapid brow slamming
+                const browTL = anime.timeline({ loop: true, easing: 'easeInQuad' });
+                browTL
+                    .add({ targets: brow, translateY: 8, duration: 60, delay: 300 })
+                    .add({ targets: brow, translateY: 0, duration: 100, easing: 'spring(1, 150, 16, 0)' })
+                    .add({ targets: brow, translateY: 10, duration: 50, delay: 250 })
+                    .add({ targets: brow, translateY: 0, duration: 120, easing: 'spring(1, 120, 14, 0)' });
+                activeAnimations.push(browTL);
+                // Violent jitter
+                activeAnimations.push(anime({ targets: faceGroup, translateX: () => anime.random(-2, 2), translateY: () => anime.random(-1, 1), duration: 40, loop: true, direction: 'alternate', easing: 'linear' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║           ANNOYED                     ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'annoyed') {
+                // Half-lidded, slight inward tilt
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 2, 26, 14, 12);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 2, 26, 14, 12);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 400, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 400, easing: 'easeOutQuad' }));
+                anime.set(leftEye, { rotateZ: 5 });
+                anime.set(rightEye, { rotateZ: -5 });
+                startBlinkCycle([leftEye, rightEye], 3000, 6000, 100, 200);
+                // Slow exasperated look sideways
+                startGaze(faceGroup, [
+                    { translateX: -5, duration: 800, delay: 2000 },
+                    { translateX: -5, duration: 1500 },
+                    { translateX: 0, duration: 600, easing: 'easeInOutSine' }
+                ]);
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║         FRUSTRATED / BORED            ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'frustrated') {
+                // Very droopy, half-closed
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 4, 24, 12, 10);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 4, 24, 12, 10);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 500, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 500, easing: 'easeOutQuad' }));
+                anime.set(leftEye, { rotateZ: -3 });
+                anime.set(rightEye, { rotateZ: 3 });
+                startBlinkCycle([leftEye, rightEye], 2000, 4000, 120, 250);
+                // Heavy sigh breathing
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.85, 1], duration: 4000, loop: true, easing: 'easeInOutSine' }));
+                // Looking down slowly
+                activeAnimations.push(anime({ targets: faceGroup, translateY: [0, 3, 2], duration: 3000, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║           CONFUSED                    ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'confused') {
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 3, 24, 14, 12);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy - 2, 26, 30, 22);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 350, easing: 'spring(1, 60, 10, 0)' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 350, easing: 'spring(1, 60, 10, 0)' }));
+                anime.set(leftEye, { rotateZ: -6 });
+                anime.set(rightEye, { rotateZ: 4 });
+                // Desync blink
+                startBlinkCycle([leftEye], 1500, 4000, 70, 110);
+                startBlinkCycle([rightEye], 2000, 5500, 90, 130);
+                // Shape swap
+                const swapLeft = makeRoundedRectEye(leftCx, eyeCy - 2, 26, 30, 22);
+                const swapRight = makeRoundedRectEye(rightCx, eyeCy + 3, 24, 14, 12);
+                const swapTL = anime.timeline({ loop: true, easing: 'easeInOutQuad' });
+                swapTL
+                    .add({ targets: leftEye, d: [{ value: swapLeft }], rotateZ: 4, duration: 300, delay: 3000 })
+                    .add({ targets: rightEye, d: [{ value: swapRight }], rotateZ: -6, duration: 300 }, '-=300')
+                    .add({ targets: leftEye, d: [{ value: targetLeft }], rotateZ: -6, duration: 300, delay: 2500 })
+                    .add({ targets: rightEye, d: [{ value: targetRight }], rotateZ: 4, duration: 300 }, '-=300');
+                activeAnimations.push(swapTL);
+                // Wander gaze
+                startGaze(faceGroup, [
+                    { translateX: -6, translateY: 3, duration: 900, delay: 500 },
+                    { translateX: 5, translateY: -4, duration: 700 },
+                    { translateX: 0, translateY: 0, duration: 600 },
+                    { translateX: 4, translateY: 2, duration: 800, delay: 400 },
+                    { translateX: -3, translateY: -3, duration: 500 },
+                    { translateX: 0, translateY: 0, duration: 700 }
+                ]);
+                // Wobble
+                activeAnimations.push(anime({ targets: leftEye, scaleY: [1, 0.85, 1, 0.9], scaleX: [1, 1.1, 1, 0.95], duration: 400, direction: 'alternate', loop: true, easing: 'steps(3)' }));
+                activeAnimations.push(anime({ targets: rightEye, scaleX: [1, 0.9, 1, 1.08], scaleY: [1, 1.05, 0.85, 1], duration: 300, direction: 'alternate', loop: true, easing: 'steps(2)' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║            SKEPTIC                    ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'skeptic') {
+                // One eye raised (bigger), one lowered (smaller) — asymmetric doubt
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 2, 22, 16, 14);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy - 3, 26, 26, 20);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 400, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 400, easing: 'easeOutQuad' }));
+                anime.set(leftEye, { rotateZ: 4 });
+                anime.set(rightEye, { rotateZ: -2 });
+                startBlinkCycle([leftEye, rightEye], 3000, 7000);
+                // Slow judgmental side-eye
+                startGaze(faceGroup, [
+                    { translateX: 4, duration: 600, delay: 1500 },
+                    { translateX: 4, duration: 2000 },
+                    { translateX: 0, duration: 500, easing: 'easeInOutSine' },
+                    { translateX: -3, duration: 500, delay: 1000 },
+                    { translateX: 0, duration: 400 }
+                ]);
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║       FOCUSED / DETERMINED            ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'focused') {
+                // Slightly narrowed, intense eyes
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy, 26, 18, 12);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy, 26, 18, 12);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 300, easing: 'easeInOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 300, easing: 'easeInOutQuad' }));
+                anime.set(leftEye, { rotateZ: 3 });
+                anime.set(rightEye, { rotateZ: -3 });
+                startBlinkCycle([leftEye, rightEye], 4000, 8000, 60, 100);
+                // Locked forward, minimal movement
+                activeAnimations.push(anime({ targets: faceGroup, translateX: [0, -1, 0, 1, 0], duration: 6000, loop: true, easing: 'easeInOutSine' }));
+                // Slight intensity pulse
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.95, 1], duration: 2000, loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║          SUSPICIOUS                   ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'suspicious') {
+                // Very narrow slit eyes
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 2, 26, 10, 8);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 2, 26, 10, 8);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 500, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 500, easing: 'easeOutQuad' }));
+                anime.set(leftEye, { rotateZ: 3 });
+                anime.set(rightEye, { rotateZ: -3 });
+                startBlinkCycle([leftEye, rightEye], 4000, 8000, 50, 80);
+                // Slow suspicious side glance
+                startGaze(faceGroup, [
+                    { translateX: 5, duration: 400, delay: 1000 },
+                    { translateX: 5, duration: 2500 },
+                    { translateX: -4, duration: 300, easing: 'easeInQuad' },
+                    { translateX: -4, duration: 2000 },
+                    { translateX: 0, duration: 500 }
+                ]);
+                // Subtle narrowing
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.85, 1], duration: 3000, loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║            SQUINT                     ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'squint') {
+                // Even narrower than suspicious — almost closed
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 3, 28, 6, 5);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 3, 28, 6, 5);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 600, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 600, easing: 'easeOutQuad' }));
+                startBlinkCycle([leftEye, rightEye], 5000, 10000, 40, 60);
+                // Trying to see — slight forward lean
+                activeAnimations.push(anime({ targets: faceGroup, translateY: [0, 2, 0], duration: 3000, loop: true, easing: 'easeInOutSine' }));
+                // Micro-adjustments
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.8, 1.1, 1], duration: 2500, loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║         UNIMPRESSED                   ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'unimpressed') {
+                // Flat, barely open — the "really?" look
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 3, 26, 10, 8);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 3, 26, 10, 8);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 500, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 500, easing: 'easeOutQuad' }));
+                startBlinkCycle([leftEye, rightEye], 3000, 6000, 100, 250);
+                // Dead stare — no gaze movement
+                // Occasional slow bored droop
+                activeAnimations.push(anime({ targets: [leftEye, rightEye], scaleY: [1, 0.8, 1], duration: 5000, loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // ╔═══════════════════════════════════════╗
+            // ║           SLEEPY                      ║
+            // ╚═══════════════════════════════════════╝
+            else if (emotionKey === 'sleepy') {
+                // Very droopy, almost closed — heavy-lidded
+                const targetLeft = makeRoundedRectEye(leftCx, eyeCy + 5, 24, 8, 6);
+                const targetRight = makeRoundedRectEye(rightCx, eyeCy + 5, 24, 8, 6);
+                activeAnimations.push(anime({ targets: leftEye, d: [{ value: targetLeft }], duration: 800, easing: 'easeOutQuad' }));
+                activeAnimations.push(anime({ targets: rightEye, d: [{ value: targetRight }], duration: 800, easing: 'easeOutQuad' }));
+                // Very slow, heavy blinks
+                startBlinkCycle([leftEye, rightEye], 1500, 3500, 200, 500);
+                // Nodding off — periodic close-then-open
+                const nodTL = anime.timeline({ loop: true, easing: 'easeInOutSine' });
+                nodTL
+                    .add({ targets: [leftEye, rightEye], scaleY: 0.2, duration: 800, delay: 3000 })
+                    .add({ targets: [leftEye, rightEye], scaleY: 1, duration: 600, easing: 'easeOutBack' })
+                    .add({ targets: [leftEye, rightEye], scaleY: 0.1, duration: 1000, delay: 2000 })
+                    .add({ targets: [leftEye, rightEye], scaleY: 1, duration: 800, easing: 'easeOutBack' });
+                activeAnimations.push(nodTL);
+                // Slow droop
+                activeAnimations.push(anime({ targets: faceGroup, translateY: [0, 3, 1], duration: 4000, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+            }
+
+            svg.appendChild(faceGroup);
+
+
+            // ═══════════════════════════════════════════════════════════
+            //  BODY ANIMATIONS (emotion-specific)
+            // ═══════════════════════════════════════════════════════════
+
+            // --- HAPPY / HAPPY_WAVE / GLEE: Gentle bounce + waving arm ---
+            if (emotionKey === 'happy_wave' || emotionKey === 'happy' || emotionKey === 'glee') {
+                const bodyBounce = anime({
+                    targets: svg,
+                    translateY: [0, emotionKey === 'glee' ? -12 : -8],
+                    duration: emotionKey === 'glee' ? 250 : 350,
+                    direction: 'alternate',
+                    loop: true,
+                    easing: 'easeInOutSine'
+                });
+                activeAnimations.push(bodyBounce);
+
+                if (bluePaths.length > 0 && emotionKey === 'happy_wave') {
+                    let bodyPath = bluePaths[0];
+                    let maxW = 0;
+                    bluePaths.forEach(p => {
+                        try { let w = p.getBBox().width; if(w > maxW) { maxW = w; bodyPath = p; } } catch(e) {}
+                    });
+                    let armParts = [];
+                    bluePaths.forEach(p => {
+                        if (p !== bodyPath) {
+                            try {
+                                let g = p.closest('g[transform]');
+                                if (g) {
+                                    const transform = g.getAttribute('transform');
+                                    const match = transform.match(/matrix\([^,]+,[^,]+,[^,]+,[^,]+,\s*([^,]+),\s*([^)]+)\)/);
+                                    if (match) {
+                                        const tx = parseFloat(match[1]);
+                                        const ty = parseFloat(match[2]);
+                                        if (tx > 200 && tx < 300 && ty > 200 && ty < 300) {
+                                            armParts.push({p, g});
+                                        }
+                                    }
+                                }
+                            } catch(e) {}
+                        }
+                    });
+                    if (armParts.length > 0) {
+                        let armWrapper = svg.querySelector('.left-arm-wrapper');
+                        if (!armWrapper) {
+                            armWrapper = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                            armWrapper.classList.add('left-arm-wrapper');
+                            let firstOutermost = armParts[0].g;
+                            while (firstOutermost.parentNode && firstOutermost.parentNode.tagName.toLowerCase() !== 'svg') {
+                                firstOutermost = firstOutermost.parentNode;
+                            }
+                            if (firstOutermost.parentNode) {
+                                firstOutermost.parentNode.insertBefore(armWrapper, firstOutermost);
+                            }
+                            armParts.forEach(part => {
+                                let curr = part.p;
+                                while (curr && curr.tagName && curr.tagName.toLowerCase() !== 'svg') {
+                                    if (curr.hasAttribute('clip-path')) { curr.removeAttribute('clip-path'); }
+                                    curr = curr.parentNode;
+                                }
+                                let out = part.g;
+                                while (out.parentNode && out.parentNode.tagName.toLowerCase() !== 'svg' && !out.parentNode.classList.contains('left-arm-wrapper')) {
+                                    out = out.parentNode;
+                                }
+                                if (out.parentNode && !out.parentNode.classList.contains('left-arm-wrapper')) {
+                                    armWrapper.appendChild(out);
+                                }
+                            });
+                        }
+                        armWrapper.style.transformOrigin = "250px 300px";
+                        const waveLoop = anime({ targets: armWrapper, rotateZ: [-15, 25], duration: 350, direction: 'alternate', loop: true, easing: 'easeInOutSine' });
+                        activeAnimations.push(waveLoop);
+                    }
+                }
+            }
+
+            // --- EXCITED: Shine effect ---
+            if (emotionKey === 'excited' || emotionKey === 'awe') {
+                try {
+                    let defs = svg.querySelector('defs');
+                    if (!defs) { defs = document.createElementNS("http://www.w3.org/2000/svg", "defs"); svg.insertBefore(defs, svg.firstChild); }
+                    if (!document.getElementById('shineGrad')) {
+                        const gradient = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
+                        gradient.id = "shineGrad";
+                        gradient.innerHTML = `<stop offset="0%" stop-color="white" stop-opacity="0"/><stop offset="50%" stop-color="white" stop-opacity="0.6"/><stop offset="100%" stop-color="white" stop-opacity="0"/>`;
+                        defs.appendChild(gradient);
+                    }
+                    const screenPath = paths.find(p => { const fill = (p.getAttribute('fill') || '').toLowerCase(); return fill === '#255796' || fill === '#1e40af'; });
+                    if (screenPath) {
+                        const bbox = screenPath.getBBox();
+                        const shineRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                        shineRect.classList.add('shine-effect');
+                        shineRect.setAttribute("x", bbox.x - bbox.width);
+                        shineRect.setAttribute("y", bbox.y);
+                        shineRect.setAttribute("width", bbox.width * 0.4);
+                        shineRect.setAttribute("height", bbox.height);
+                        shineRect.setAttribute("fill", "url(#shineGrad)");
+                        screenPath.parentNode.appendChild(shineRect);
+                        activeAnimations.push(anime({ targets: shineRect, translateX: [0, bbox.width * 3], skewX: -25, duration: 1200, endDelay: 2000, loop: true, easing: 'easeInOutQuad' }));
+                    }
+                } catch(e) {}
+            }
+
+            // --- ANGRY / FURIOUS: Shaking body + color pulse ---
+            if (emotionKey === 'angry' || emotionKey === 'mad' || emotionKey === 'furious') {
+                const intensity = emotionKey === 'furious' ? 10 : 6;
+                activeAnimations.push(anime({ targets: svg, translateX: () => anime.random(-intensity, intensity), translateY: () => anime.random(-intensity/2, intensity/2), duration: emotionKey === 'furious' ? 30 : 50, loop: true, direction: 'alternate', easing: 'linear' }));
+                bluePaths.forEach(p => {
+                    const ogFill = p.getAttribute('data-og-fill');
+                    const redTarget = emotionKey === 'furious' ? '#7f1d1d' : '#991b1b';
+                    activeAnimations.push(anime({ targets: p, fill: [ogFill, redTarget, ogFill], duration: emotionKey === 'furious' ? 400 : 800, loop: true, easing: 'easeInOutSine' }));
+                });
+            }
+
+            // --- CONFUSED: Dizzy head tilt ---
+            if (emotionKey === 'confused') {
+                activeAnimations.push(anime({ targets: svg, rotateZ: [-8, 8], duration: 1500, loop: true, direction: 'alternate', easing: 'easeInOutQuad' }));
+            }
+
+            // --- SAD: Slight droop ---
+            if (emotionKey === 'sad_down' || emotionKey === 'sad_up') {
+                activeAnimations.push(anime({ targets: svg, translateY: [0, 3], duration: 2000, direction: 'alternate', loop: true, easing: 'easeInOutSine' }));
+            }
+
+            // --- WORRIED / SCARED: Subtle body tremble ---
+            if (emotionKey === 'worried' || emotionKey === 'scared') {
+                activeAnimations.push(anime({ targets: svg, translateX: () => anime.random(-2, 2), duration: 80, loop: true, direction: 'alternate', easing: 'linear' }));
+            }
+
+            // --- SLEEPY: Slow sway ---
+            if (emotionKey === 'sleepy') {
+                activeAnimations.push(anime({ targets: svg, rotateZ: [-2, 2], duration: 3000, loop: true, direction: 'alternate', easing: 'easeInOutSine' }));
+            }
+        }
+
+
+
+        function applyEmotion(emotionKey, triggerParticlesOnly = false) {
+            return new Promise((resolve) => {
+                const config = emotions[emotionKey];
+                
+                // Clear existing SVG and animations
+                activeAnimations.forEach(a => { if (a && a.pause) a.pause(); });
+                activeAnimations = [];
+                
+                // Load the base SVG body — ALL emotions use the neutral body (happy.file1)
+                // since our eye system programmatically injects the correct eye shapes.
+                // Only happy_wave uses its own SVG if available (for the wave arm pose).
+                if (emotionKey === 'happy_wave' && svgAssets['happy_wave'] && svgAssets['happy_wave'].file1) {
+                    robotWrapper.innerHTML = svgAssets['happy_wave'].file1;
+                } else {
+                    robotWrapper.innerHTML = svgAssets['happy'].file1;
+                }
+
+                let svg = robotWrapper.querySelector('svg');
+                if (svg) {
+                    svg.classList.add('robot-zoom');
+                    
+                    // Annihilate all embedded raster images (this removes the baked-in fuzzy pink blushes)
+                    svg.querySelectorAll('image').forEach(img => img.remove());
+                }
+
+                if (triggerParticlesOnly) {
+                    const particleMap = {
+                        excited:  { color: 0xeab308, count: 120, type: 'explode' },
+                        glee:     { color: 0x60a5fa, count: 100, type: 'explode' },
+                        surprised:{ color: 0xfbbf24, count: 80,  type: 'explode' },
+                        awe:      { color: 0x8b5cf6, count: 60,  type: 'explode' },
+                        happy_wave:{ color: 0x3b82f6, count: 80, type: 'explode' },
+                        happy:    { color: 0x3b82f6, count: 40,  type: 'explode' },
+                        angry:    { color: 0xef4444, count: 40,  type: 'steam' },
+                        mad:      { color: 0xef4444, count: 40,  type: 'steam' },
+                        furious:  { color: 0xdc2626, count: 80,  type: 'steam' },
+                        annoyed:  { color: 0xfb923c, count: 20,  type: 'steam' },
+                        frustrated:{ color: 0xea580c, count: 30, type: 'steam' },
+                        confused: { color: 0xa855f7, count: 30,  type: 'dizzy' },
+                        scared:   { color: 0xf87171, count: 40,  type: 'dizzy' },
+                        worried:  { color: 0xc084fc, count: 20,  type: 'dizzy' }
+                    };
+                    const pConfig = particleMap[emotionKey];
+                    if (pConfig) triggerParticles(pConfig.color, pConfig.count, pConfig.type);
+                    if (svg) setupSVGAnimations(svg, emotionKey);
+                    resolve();
+                    return;
+                }
+                
+                if (svg) {
+                    setupSVGAnimations(svg, emotionKey);
+                }
+                
+                label.innerText = config.label;
+                glow.style.backgroundColor = config.glow;
+                
+                anime({
+                    targets: robotWrapper,
+                    scale: [0.95, 1.05, 1],
+                    opacity: 1,
+                    duration: 600,
+                    easing: 'spring(1, 80, 10, 0)',
+                    complete: () => resolve()
+                });
+
+                emotionItems.forEach(item => {
+                    if (item.dataset.emotion === emotionKey) {
+                        item.classList.remove('emotion-inactive');
+                        item.classList.add('emotion-active');
+                    } else {
+                        item.classList.add('emotion-inactive');
+                        item.classList.remove('emotion-active');
+                    }
+                });
+                currentSelected = emotionKey;
+                
+                if (appState === 'SELECT_BEFORE') {
+                    anime({
+                        targets: actionBtn,
+                        opacity: 1,
+                        translateY: 0,
+                        duration: 400,
+                        easing: 'spring(1, 80, 10, 0)'
+                    });
+                    actionBtn.style.pointerEvents = 'auto';
+                    actionBtn.innerText = "Confirm Baseline";
+                } else if (appState === 'SELECT_AFTER') {
+                    anime({
+                        targets: actionBtn,
+                        opacity: 1,
+                        translateY: 0,
+                        duration: 400,
+                        easing: 'spring(1, 80, 10, 0)'
+                    });
+                    actionBtn.style.pointerEvents = 'auto';
+                    actionBtn.innerText = "Initialize Synthesis";
+                }
+            });
+        }
+
+        emotionItems.forEach(item => {
+            item.addEventListener('click', () => {
+                if (appState === 'GENERATING' || appState === 'RESULT') return;
+                applyEmotion(item.dataset.emotion);
+            });
+        });
+
+        actionBtn.addEventListener('click', () => {
+            if (appState === 'SELECT_BEFORE') {
+                beforeEmotion = currentSelected;
+                capturedBeforeSVG = robotWrapper.innerHTML;
+                appState = 'SELECT_AFTER';
+                
+                anime({
+                    targets: stepTitle,
+                    opacity: 0,
+                    translateY: -10,
+                    duration: 200,
+                    easing: 'easeInQuad',
+                    complete: () => {
+                        stepTitle.innerHTML = "Select target<br/>parameters.";
+                        anime({
+                            targets: stepTitle,
+                            opacity: 1,
+                            translateY: 0,
+                            duration: 400,
+                            easing: 'spring(1, 80, 10, 0)'
+                        });
+                    }
+                });
+                
+                anime({ targets: actionBtn, opacity: 0, translateY: 10, duration: 200, easing: 'easeInQuad' });
+                actionBtn.style.pointerEvents = 'none';
+                
+                emotionItems.forEach(item => {
+                    item.classList.add('emotion-inactive');
+                    item.classList.remove('emotion-active');
+                });
+                currentSelected = null;
+                label.innerText = "Awaiting Input...";
+                
+            } else if (appState === 'SELECT_AFTER') {
+                afterEmotion = currentSelected;
+                appState = 'GENERATING';
+                
+                // Start capturing live frames for GIF export
+                recordedFrames = [];
+                const targetNode = document.getElementById('robot-wrapper');
+                const fps = 15;
+                const delayMs = 1000 / fps;
+                
+                if (recordingInterval) clearInterval(recordingInterval);
+                recordingInterval = setInterval(() => {
+                    if (targetNode) {
+                        const computedStyle = window.getComputedStyle(targetNode);
+                        recordedFrames.push({
+                            svg: targetNode.innerHTML,
+                            transform: computedStyle.transform
+                        });
+                    }
+                }, delayMs);
+                
+                anime({ targets: actionBtn, opacity: 0, translateY: 10, duration: 200, easing: 'easeInQuad' });
+                actionBtn.style.pointerEvents = 'none';
+                
+                anime({ targets: emotionTrack, opacity: 0, duration: 300, easing: 'easeOutQuad' });
+                emotionTrack.style.pointerEvents = 'none';
+
+                anime({ targets: generatingOverlay, opacity: 1, duration: 500, easing: 'easeOutQuad' });
+                
+                anime({
+                    targets: progressBar,
+                    width: ["0%", "100%"],
+                    duration: 4000,
+                    easing: 'easeInOutSine'
+                });
+                
+                // Matrix Text scramble effect
+                let scrambles = 0;
+                const matrixInterval = setInterval(() => {
+                    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()";
+                    let result = "";
+                    for(let i=0; i<20; i++) {
+                        result += chars.charAt(Math.floor(Math.random() * chars.length));
+                    }
+                    matrixText.innerText = result;
+                    scrambles++;
+                    if(scrambles > 40) {
+                        clearInterval(matrixInterval);
+                        matrixText.innerText = `SYNTHESIS: ${emotions[afterEmotion].label.toUpperCase()}`;
+                    }
+                }, 80);
+
+                // Nervous jitter 
+                anime({
+                    targets: robotWrapper,
+                    translateX: () => anime.random(-12, 12),
+                    translateY: () => anime.random(-12, 0),
+                    rotateZ: () => anime.random(-4, 4),
+                    duration: 60,
+                    direction: 'alternate',
+                    loop: 60,
+                    easing: 'linear'
+                });
+
+                setTimeout(() => {
+                    playResultAnimation();
+                }, 4000);
+            } else if (appState === 'RESULT') {
+                appState = 'SELECT_BEFORE';
+                beforeEmotion = null;
+                afterEmotion = null;
+                currentSelected = null;
+                
+                anime({
+                    targets: stepTitle,
+                    opacity: 0,
+                    translateY: -10,
+                    duration: 200,
+                    easing: 'easeInQuad',
+                    complete: () => {
+                        stepTitle.innerHTML = "Select initial<br/>parameters.";
+                        anime({
+                            targets: stepTitle,
+                            opacity: 1,
+                            translateY: 0,
+                            duration: 400,
+                            easing: 'spring(1, 80, 10, 0)'
+                        });
+                    }
+                });
+                
+                anime({ targets: actionBtn, opacity: 0, translateY: 10, duration: 200, easing: 'easeInQuad' });
+                actionBtn.style.pointerEvents = 'none';
+                
+                anime({ targets: emotionTrack, opacity: 1, duration: 300, easing: 'easeOutQuad' });
+                emotionTrack.style.pointerEvents = 'auto';
+                
+                emotionItems.forEach(item => {
+                    item.classList.add('emotion-inactive');
+                    item.classList.remove('emotion-active');
+                });
+                label.innerText = "Awaiting Input...";
+                applyEmotion('happy'); 
+            }
+        });
+
+        function playResultAnimation() {
+            appState = 'RESULT';
+            anime({ targets: generatingOverlay, opacity: 0, duration: 600, easing: 'easeOutQuad' });
+            
+            anime.set(robotWrapper, { rotateZ: 0, translateX: 0, translateY: -8 });
+
+            anime({
+                targets: stepTitle,
+                opacity: 0,
+                translateY: -10,
+                duration: 200,
+                easing: 'easeInQuad',
+                complete: () => {
+                    stepTitle.innerHTML = "Synthesis<br/>complete.";
+                    anime({
+                        targets: stepTitle,
+                        opacity: 1,
+                        translateY: 0,
+                        duration: 400,
+                        easing: 'spring(1, 80, 10, 0)'
+                    });
+                }
+            });
+            
+            actionBtn.style.display = 'none';
+            progressBar.style.width = "0%";
+
+            // Instantly Before
+            applyEmotion(beforeEmotion, false).then(() => {
+                const tl = anime.timeline();
+                tl.add({
+                    targets: robotWrapper,
+                    rotateZ: 10,
+                    scale: 0.9,
+                    duration: 400,
+                    easing: 'easeInQuad'
+                })
+                .add({
+                    targets: robotWrapper,
+                    rotateZ: -10,
+                    duration: 300,
+                    easing: 'easeInOutQuad',
+                    complete: () => {
+                        applyEmotion(afterEmotion, true);
+                    }
+                })
+                .add({
+                    targets: robotWrapper,
+                    rotateZ: 0,
+                    scale: 1.15,
+                    duration: 400,
+                    delay: 200,
+                    easing: 'easeOutBack'
+                })
+                .add({
+                    targets: robotWrapper,
+                    scale: 1,
+                    duration: 800,
+                    easing: 'spring(1, 80, 10, 0)',
+                    complete: () => {
+                        capturedAfterSVG = robotWrapper.innerHTML;
+                        
+                        const resultArea = document.getElementById('result-options-area');
+                        resultArea.classList.remove('hidden');
+                        resultArea.classList.add('flex');
+                        
+                        anime({ 
+                            targets: '#result-options-area > button', 
+                            opacity: [0, 1], 
+                            translateY: [10, 0], 
+                            duration: 400, 
+                            delay: anime.stagger(100),
+                            easing: 'spring(1, 80, 10, 0)' 
+                        });
+
+                        setTimeout(() => {
+                            if (recordingInterval) {
+                                clearInterval(recordingInterval);
+                                recordingInterval = null;
+                            }
+                        }, 500);
+                    }
+                });
+            });
+        }
+
+        // Init
+        anime.set(actionBtn, { translateY: 10 });
+        applyEmotion('happy');
+
+        function downloadSVG(svgString, filename) {
+            const blob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- SVG EXPORT LOGIC ---
+        document.addEventListener('click', (e) => {
+            const btnSvg = e.target.closest('#btn-download-svgs');
+            if (!btnSvg) return;
+            
+            if (!beforeEmotion || !afterEmotion) return;
+            
+            let svg1 = capturedBeforeSVG;
+            svg1 = svg1.replace(/<svg[^>]*>/, match => {
+                if (!match.includes('xmlns=')) {
+                    return match.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"');
+                }
+                return match;
+            });
+            downloadSVG(svg1, `frame1-${beforeEmotion}.svg`);
+            
+            setTimeout(() => {
+                let svg2 = capturedAfterSVG;
+                svg2 = svg2.replace(/<svg[^>]*>/, match => {
+                    if (!match.includes('xmlns=')) {
+                        return match.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"');
+                    }
+                    return match;
+                });
+                downloadSVG(svg2, `frame2-${afterEmotion}.svg`);
+            }, 500);
+        });
+
+        // --- RESTART MATRIX LOGIC ---
+        document.addEventListener('click', (e) => {
+            const btnRestart = e.target.closest('#btn-restart-matrix');
+            if (!btnRestart) return;
+
+            appState = 'SELECT_BEFORE';
+            beforeEmotion = null;
+            afterEmotion = null;
+            currentSelected = null;
+            
+            document.getElementById('result-options-area').classList.add('hidden');
+            document.getElementById('result-options-area').classList.remove('flex');
+            
+            anime({
+                targets: stepTitle,
+                opacity: 0,
+                translateY: -10,
+                duration: 200,
+                easing: 'easeInQuad',
+                complete: () => {
+                    stepTitle.innerHTML = "Select initial<br/>parameters.";
+                    anime({
+                        targets: stepTitle,
+                        opacity: 1,
+                        translateY: 0,
+                        duration: 400,
+                        easing: 'spring(1, 80, 10, 0)'
+                    });
+                }
+            });
+            
+            actionBtn.style.display = 'block';
+            anime({ targets: actionBtn, opacity: 0, translateY: 10, duration: 200, easing: 'easeInQuad' });
+            actionBtn.style.pointerEvents = 'none';
+            
+            anime({ targets: emotionTrack, opacity: 1, duration: 300, easing: 'easeOutQuad' });
+            emotionTrack.style.pointerEvents = 'auto';
+            
+            emotionItems.forEach(item => {
+                item.classList.add('emotion-inactive');
+                item.classList.remove('emotion-active');
+            });
+            label.innerText = "Awaiting Input...";
+            applyEmotion('happy');
+        });
+
+        // --- GIF RECORDING LOGIC ---
+        let isRecordingGIF = false;
+        document.addEventListener('click', async (e) => {
+            const btnRecordGif = e.target.closest('#btn-record-gif');
+            if (!btnRecordGif || isRecordingGIF) return;
+            
+            isRecordingGIF = true;
+            const ogText = btnRecordGif.innerHTML;
+            btnRecordGif.innerHTML = '<span class="material-symbols-outlined animate-spin" style="animation: spin 1s linear infinite;">refresh</span><span>Recording... (Please wait)</span>';
+            
+            await new Promise(r => setTimeout(r, 50));
+            
+            try {
+                // Fetch the worker locally as a blob to bypass CORS/Origin issues when generating
+                const workerRes = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+                const workerText = await workerRes.text();
+                const workerBlob = new Blob([workerText], { type: 'application/javascript' });
+                const workerUrl = URL.createObjectURL(workerBlob);
+
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 10,
+                    workerScript: workerUrl,
+                    width: 400,
+                    height: 400,
+                    transparent: 0x000000
+                });
+
+                const targetNode = document.getElementById('robot-wrapper');
+                const fps = 15;
+                const delayMs = 1000 / fps;
+                
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 400;
+                tempCanvas.height = 400;
+                const ctx = tempCanvas.getContext('2d');
+                
+                const framesToProcess = recordedFrames.length > 0 ? recordedFrames : [];
+                const actualFrames = framesToProcess.length || 30; // fallback
+
+                for (let i = 0; i < actualFrames; i++) {
+                    let svgString;
+                    let transform = 'none';
+                    
+                    if (recordedFrames.length > 0) {
+                        svgString = recordedFrames[i].svg;
+                        transform = recordedFrames[i].transform;
+                    } else {
+                        svgString = targetNode.innerHTML;
+                        const cs = window.getComputedStyle(targetNode);
+                        transform = cs.transform;
+                    }
+                    
+                    // Force the xmlns on the root tag to avoid blank/XML errors
+                    svgString = svgString.replace(/<svg[^>]*>/, match => {
+                        if (!match.includes('xmlns=')) {
+                            return match.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+                        }
+                        return match;
+                    });
+                    
+                    const img = new Image();
+                    const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+                    const url = URL.createObjectURL(svgBlob);
+                    
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = url;
+                    });
+                    
+                    ctx.clearRect(0, 0, 400, 400);
+                    ctx.save();
+                    ctx.translate(200, 200);
+                    if (transform && transform !== 'none') {
+                        const matrix = new DOMMatrix(transform);
+                        ctx.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
+                    }
+                    ctx.drawImage(img, -200, -200, 400, 400);
+                    ctx.restore();
+                    
+                    URL.revokeObjectURL(url);
+                    
+                    gif.addFrame(ctx, { delay: delayMs, copy: true });
+                    
+                    btnRecordGif.innerHTML = `<span class="material-symbols-outlined">hourglass_empty</span><span>Encoding ${Math.round((i/actualFrames)*100)}%</span>`;
+                    
+                    if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+                }
+
+                btnRecordGif.innerHTML = '<span class="material-symbols-outlined animate-spin" style="animation: spin 1s linear infinite;">autorenew</span><span>Encoding GIF...</span>';
+                
+                gif.on('finished', function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `unibot-${currentSelected}.gif`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    
+                    btnRecordGif.innerHTML = ogText;
+                    isRecordingGIF = false;
+                });
+
+                gif.render();
+            } catch (err) {
+                console.error("GIF generation failed:", err);
+                btnRecordGif.innerHTML = '<span class="material-symbols-outlined">error</span><span>Failed. Try again.</span>';
+                setTimeout(() => { btnRecordGif.innerHTML = ogText; isRecordingGIF = false; }, 3000);
+            }
+        });
+
+</script>
+</body>
+</html>
