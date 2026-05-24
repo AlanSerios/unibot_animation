@@ -10,6 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
     <script src="assets.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         :root {
             --charcoal: #18181B;
@@ -73,6 +74,48 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
+    
+    .pixel-font { font-family: 'Press Start 2P', cursive; }
+    
+    .pixel-bubble {
+        position: absolute;
+        bottom: 300px;
+        left: 50%;
+        margin-left: 120px;
+        background: white;
+        border: 4px solid black;
+        padding: 14px 18px;
+        color: black;
+        font-size: 12px;
+        line-height: 1.5;
+        max-width: 320px;
+        z-index: 100;
+        display: none;
+        transform-origin: bottom left;
+        box-shadow: 
+            8px 8px 0 rgba(0,0,0,0.8),
+            inset -4px -4px 0 rgba(0,0,0,0.1);
+    } 
+    /* Blocky pixel tail */
+    .pixel-bubble::before {
+        content: "";
+        position: absolute;
+        bottom: -16px;
+        left: 24px;
+        border-width: 12px 16px 0 0;
+        border-style: solid;
+        border-color: black transparent transparent transparent;
+    }
+    .pixel-bubble::after {
+        content: "";
+        position: absolute;
+        bottom: -9px;
+        left: 28px;
+        border-width: 8px 12px 0 0;
+        border-style: solid;
+        border-color: white transparent transparent transparent;
+    }
+
     </style>
 
     <!-- Export Libraries -->
@@ -81,6 +124,7 @@
     <style>
       @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.min.js"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col p-4 md:p-6 overflow-hidden selection:bg-blue-500/30">
 
@@ -92,20 +136,24 @@
             <h1 class="text-base font-semibold tracking-wide">UNIBOT</h1>
         </div>
         <div class="hidden md:flex items-center gap-6 text-xs text-zinc-400 font-medium tracking-widest uppercase">
-            <span class="text-white border-b border-white pb-1 cursor-pointer">Visualizer</span>
+            <span id="nav-visualizer" class="text-white border-b border-white pb-1 cursor-pointer transition-colors">Visualizer</span>
+            <span id="nav-playground" class="hover:text-white transition-colors cursor-pointer pb-1">Playground</span>
         </div>
     </header>
 
     <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 relative z-10 max-w-[900px] mx-auto w-full">
         
         <!-- Asymmetric Split: 8 cols for display, 4 cols for controls -->
-        <div class="lg:col-span-8 glass-panel rounded-[2.5rem] relative overflow-hidden flex flex-col items-center justify-end min-h-[350px]">
+        <div id="robot-container" class="lg:col-span-8 glass-panel rounded-[2.5rem] relative overflow-hidden flex flex-col items-center justify-end min-h-[350px]">
             <!-- Ambient Glow -->
             <div id="ambient-glow" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] h-[70%] bg-blue-500/10 blur-[120px] rounded-full transition-colors duration-1000"></div>
             
             <canvas id="pixi-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-15"></canvas>
             
             <div id="robot-wrapper" class="absolute inset-0 w-full h-full flex items-end justify-center overflow-visible z-10 opacity-0 pb-12">
+            </div>
+            <div id="robot-chat-bubble" class="pixel-bubble pixel-font">
+                <span id="chat-bubble-text"></span><span id="chat-cursor" class="animate-pulse">_</span>
             </div>
 
             <!-- Loader Overlay -->
@@ -119,6 +167,17 @@
                 </div>
             </div>
             
+            
+            <!-- Playground Chat UI -->
+            <div id="playground-chat-ui" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 hidden w-[80%] max-w-[400px]">
+                <div class="relative flex items-center">
+                    <input type="text" id="playground-chat-input" placeholder="Talk to Unibot..." class="w-full bg-black/60 border border-white/20 rounded-full py-3 px-6 text-white text-sm outline-none backdrop-blur-md focus:border-blue-500/50 transition-colors shadow-2xl" autocomplete="off" />
+                    <button id="playground-chat-btn" class="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-500 hover:bg-blue-400 text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors shadow-lg">
+                        <span class="material-symbols-outlined text-sm">send</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Context Label -->
             <div class="absolute bottom-6 left-6 z-30">
                 <p class="mono-font text-[9px] text-zinc-500 tracking-widest uppercase mb-2">NEURAL STATE</p>
@@ -126,7 +185,7 @@
             </div>
         </div>
 
-        <div class="lg:col-span-4 flex flex-col gap-4">
+        <div id="controls-container" class="lg:col-span-4 flex flex-col gap-4">
             <div class="pt-8 flex flex-col justify-start relative z-10">
                 <h2 id="step-title" class="text-xl font-medium tracking-tight leading-[1.1] mb-5">Select initial<br/>parameters.</h2>
                 <p class="text-zinc-400 text-xs leading-relaxed max-w-[40ch]">Define the cognitive baseline for Unibot's neural matrix before initializing the transformation cascade.</p>
@@ -1180,14 +1239,20 @@
                 label.innerText = config.label;
                 glow.style.backgroundColor = config.glow;
                 
-                anime({
-                    targets: robotWrapper,
-                    scale: [0.95, 1.05, 1],
-                    opacity: 1,
-                    duration: 600,
-                    easing: 'spring(1, 80, 10, 0)',
-                    complete: () => resolve()
-                });
+                if (typeof isPlaygroundMode !== 'undefined' && isPlaygroundMode) {
+                    // In playground mode, don't animate robotWrapper directly — 
+                    // it would overwrite the robotPos-based transform (translate/rotate/scale)
+                    resolve();
+                } else {
+                    anime({
+                        targets: robotWrapper,
+                        scale: [0.95, 1.05, 1],
+                        opacity: 1,
+                        duration: 600,
+                        easing: 'spring(1, 80, 10, 0)',
+                        complete: () => resolve()
+                    });
+                }
 
                 emotionItems.forEach(item => {
                     if (item.dataset.emotion === emotionKey) {
@@ -1659,6 +1724,876 @@
             }
         });
 
+
+
+
+
+
+
+// ==========================================
+// PLAYGROUND MODE LOGIC (Cozmo-Style Physics)
+// ==========================================
+const navVisualizer = document.getElementById('nav-visualizer');
+const navPlayground = document.getElementById('nav-playground');
+const controlsContainer = document.getElementById('controls-container');
+const robotContainer = document.getElementById('robot-container');
+
+let isPlaygroundMode = false;
+let playgroundBlinkTimer = null;
+let idleDecayTimer = null;
+let isBored = false;
+
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+
+// Global absolute position of the robot with full transform cache to avoid AnimeJS conflicts
+let robotPos = { x: 0, y: 0, rotate: 0, scaleX: 1, scaleY: 1 };
+let dragStartPos = { x: 0, y: 0 };
+
+let clickTimeout = null;
+let clickCount = 0;
+
+let lastMouseX = window.innerWidth / 2;
+let lastMouseY = window.innerHeight / 2;
+
+navPlayground.addEventListener('click', () => {
+    if (isPlaygroundMode) return;
+    isPlaygroundMode = true;
+    
+    navPlayground.classList.add('text-white', 'border-b', 'border-white');
+    navPlayground.classList.remove('hover:text-white');
+    navVisualizer.classList.remove('text-white', 'border-b', 'border-white');
+    navVisualizer.classList.add('hover:text-white');
+    
+    anime({
+        targets: controlsContainer,
+        opacity: [1, 0],
+        duration: 400,
+        easing: 'easeInOutQuad',
+        complete: () => {
+            controlsContainer.style.display = 'none';
+            robotContainer.classList.remove('lg:col-span-8');
+            
+            robotContainer.classList.add('lg:col-span-12');
+            chatUi.style.display = 'block';
+            anime({ targets: chatUi, opacity: [0,1], translateY: [20,0], duration: 500, easing: 'easeOutCubic' });
+
+            
+            applyEmotion('neutral');
+            startPlaygroundIdle();
+            if (typeof resetThoughtTimer !== 'undefined') resetThoughtTimer();
+            updateEyeTracking();
+            resetIdleDecay();
+        }
+    });
+});
+
+navVisualizer.addEventListener('click', () => {
+    if (!isPlaygroundMode) return;
+    isPlaygroundMode = false;
+    
+    navVisualizer.classList.add('text-white', 'border-b', 'border-white');
+    navVisualizer.classList.remove('hover:text-white');
+    navPlayground.classList.remove('text-white', 'border-b', 'border-white');
+    navPlayground.classList.add('hover:text-white');
+    
+    stopPlaygroundIdle();
+    if (typeof thoughtTimer !== 'undefined') clearTimeout(thoughtTimer);
+    clearTimeout(idleDecayTimer);
+    
+    anime.remove(robotPos);
+    anime({
+        targets: robotPos,
+        x: 0,
+        y: 0,
+        rotate: 0,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 500,
+        easing: 'easeOutElastic(1, .8)',
+        update: () => updateRobotTransform()
+    });
+    
+    
+    robotContainer.classList.remove('lg:col-span-12');
+    anime({ targets: chatUi, opacity: [1,0], translateY: [0,20], duration: 300, easing: 'easeInCubic', complete: ()=>chatUi.style.display='none' });
+
+    robotContainer.classList.add('lg:col-span-8');
+    controlsContainer.style.display = 'flex';
+    
+    anime({
+        targets: controlsContainer,
+        opacity: [0, 1],
+        duration: 400,
+        easing: 'easeInOutQuad'
+    });
+    
+    const activeBtn = document.querySelector('.emotion-item.emotion-active');
+    if (activeBtn) {
+        applyEmotion(activeBtn.dataset.emotion);
+    }
+});
+
+function updateRobotTransform() {
+    robotWrapper.style.transform = `translate(${robotPos.x}px, ${robotPos.y}px) rotate(${robotPos.rotate}deg) scale(${robotPos.scaleX}, ${robotPos.scaleY})`;
+    
+    // Sync the chat bubble position to the robot's translation, but DO NOT scale or rotate it!
+    const bubble = document.getElementById('robot-chat-bubble');
+    if (bubble) {
+        bubble.style.transform = `translate(${robotPos.x}px, ${robotPos.y}px)`;
+    }
+}
+
+function startPlaygroundIdle() {
+    stopPlaygroundIdle();
+    schedulePlaygroundBlink();
+}
+
+function stopPlaygroundIdle() {
+    clearTimeout(playgroundBlinkTimer);
+    anime.remove(robotPos);
+    const face = document.querySelector('.current-layer');
+    if (face) anime.remove(face);
+}
+
+function resetIdleDecay() {
+    if (!isPlaygroundMode) return;
+    clearTimeout(idleDecayTimer);
+    
+    if (isBored) {
+        isBored = false;
+        applyEmotion('surprised'); // Wake up
+        setTimeout(() => {
+            if (isPlaygroundMode && !isDragging) {
+                applyEmotion('neutral');
+                updateEyeTracking();
+            }
+        }, 1000);
+    }
+    
+    idleDecayTimer = setTimeout(() => {
+        if (isPlaygroundMode && !isDragging) {
+            isBored = true;
+            applyEmotion('sad_down'); // Boredom state
+            
+            // Re-center eyes/face
+            const face = document.querySelector('.current-layer');
+            if (face) {
+                anime({
+                    targets: face,
+                    translateX: 0,
+                    translateY: 0,
+                    duration: 1000,
+                    easing: 'easeOutQuad'
+                });
+            }
+        }
+    }, 15000);
+}
+
+function schedulePlaygroundBlink() {
+    const delay = 2000 + Math.random() * 5000;
+    playgroundBlinkTimer = setTimeout(() => {
+        if (!isPlaygroundMode || isDragging) return;
+        
+        anime({
+            targets: robotPos,
+            scaleY: [
+                { value: 0.8, duration: 80, easing: 'easeInQuad' },
+                { value: 1.05, duration: 150, easing: 'easeOutElastic(1, .5)' },
+                { value: 1, duration: 100, easing: 'easeOutQuad' }
+            ],
+            update: () => updateRobotTransform(),
+            complete: () => schedulePlaygroundBlink()
+        });
+    }, delay);
+}
+
+function updateEyeTracking() {
+    if (!isPlaygroundMode || isDragging || isBored) return;
+    
+    const rect = robotWrapper.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2 - 20; 
+    
+    const dx = lastMouseX - centerX;
+    const dy = lastMouseY - centerY;
+    
+    const percentX = Math.max(-1, Math.min(1, dx / (window.innerWidth / 2)));
+    const percentY = Math.max(-1, Math.min(1, dy / (window.innerHeight / 2)));
+    
+    // Parallax the face
+    const moveX = percentX * 18;
+    const moveY = percentY * 12;
+    
+    const face = document.querySelector('.current-layer');
+    if (face) {
+        anime({
+            targets: face,
+            translateX: moveX,
+            translateY: moveY,
+            duration: 400,
+            easing: 'easeOutCubic'
+        });
+    }
+}
+
+
+// ==========================================
+// PLAYGROUND CHAT LOGIC
+// ==========================================
+const chatUi = document.getElementById('playground-chat-ui');
+const chatInput = document.getElementById('playground-chat-input');
+const chatBtn = document.getElementById('playground-chat-btn');
+const chatBubble = document.getElementById('robot-chat-bubble');
+const chatText = document.getElementById('chat-bubble-text');
+
+let chatTimeout = null;
+
+function generateGibberish(length = 20) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#*@!';
+    let result = '';
+    for(let i=0; i<length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    return result;
+}
+
+// ==========================================
+// UNIBOT FUSE.JS BRAIN
+// ==========================================
+// --- CONVERSATION CONTEXT STATE ---
+let currentConversationTopic = null;
+const contextFuseInstances = {};
+
+const contextDictionary = {
+    "UNIFAB_INFO": [
+        {
+            patterns: ["who made it", "who built it", "who created it"],
+            action: () => "IT WAS DEVELOPED FOR THE USTP-CDO FABRICATION LABORATORY!"
+        },
+        {
+            patterns: ["how do i use it", "what do i do", "what is it for"],
+            action: () => "YOU START BY UPLOADING A 3D MODEL FILE TO GET A QUOTE!"
+        }
+    ],
+    "JOKE": [
+        {
+            patterns: ["tell me another one", "another", "one more", "again", "another joke"],
+            action: () => {
+                applyEmotion('happy');
+                const jokes = [
+                    "WHAT IS A PROGRAMMER'S FAVORITE HANGOUT SPOT? THE FOO BAR.",
+                    "THERE ARE 10 TYPES OF PEOPLE: THOSE WHO UNDERSTAND BINARY, AND THOSE WHO DON'T.",
+                    "WHY DID THE 3D PRINTER BREAK UP WITH THE LASER CUTTER? IT SAID THEY LACKED DEPTH."
+                ];
+                return jokes[Math.floor(Math.random() * jokes.length)];
+            }
+        }
+    ],
+    "COIN_TOSS": [
+        {
+            patterns: ["flip it again", "one more time", "again", "flip another"],
+            action: () => {
+                const result = Math.random() > 0.5 ? "HEADS" : "TAILS";
+                applyEmotion('happy'); 
+                const res = [
+                    "FLIPPING AGAIN... IT IS " + result + "!",
+                    "ANOTHER TOSS... " + result + ".",
+                    "CALCULATING PHYSICS SIMULATION... IT CAME UP " + result + "!"
+                ];
+                return res[Math.floor(Math.random() * res.length)];
+            }
+        }
+    ],
+    "RPS_GAME": [
+        {
+            patterns: ["rock", "paper", "scissors"],
+            action: (input) => {
+                const choices = ["rock", "paper", "scissors"];
+                const botChoice = choices[Math.floor(Math.random() * choices.length)];
+                let result = "";
+                
+                const userChoice = input.toLowerCase().replace(/[^a-z]/g, '');
+                
+                if (userChoice === botChoice) result = "IT'S A TIE!";
+                else if (
+                    (userChoice === "rock" && botChoice === "scissors") ||
+                    (userChoice === "paper" && botChoice === "rock") ||
+                    (userChoice === "scissors" && botChoice === "paper")
+                ) {
+                    result = "YOU WIN! MY ALGORITHMS FAILED ME.";
+                    applyEmotion('sad');
+                } else {
+                    result = "I WIN! ROBOTS ARE SUPERIOR!";
+                    applyEmotion('happy');
+                }
+                
+                return "YOU CHOSE " + userChoice.toUpperCase() + ". I CHOSE " + botChoice.toUpperCase() + ". " + result;
+            }
+        }
+    ],
+    "COST_CALC": [
+        {
+            patterns: ["grams", "g", "weight"],
+            action: (input) => {
+                // Try to extract a number from the input
+                const match = input.match(/\d+(\.\d+)?/);
+                if (match) {
+                    const weight = parseFloat(match[0]);
+                    const cost = weight * 1.5; // Simulate 1.5 PHP per gram
+                    currentConversationTopic = null; // Reset context
+                    applyEmotion('happy');
+                    return "AT 1.50 PHP PER GRAM, A " + weight + "G PRINT WOULD COST APPROXIMATELY " + cost.toFixed(2) + " PHP!";
+                }
+                return "I DIDN'T CATCH A NUMBER. HOW MANY GRAMS IS YOUR MODEL?";
+            }
+        }
+    ]
+};
+
+const unibotDictionary = [
+    // --- GREETINGS & SMALL TALK ---
+    {
+        patterns: ["hello", "hi", "hey", "greetings", "what's up", "howdy"],
+        action: () => {
+            const res = ["HELLO HUMAN! HOW CAN I ASSIST YOU TODAY?", "GREETINGS! I AM READY TO PROCESS YOUR QUERIES.", "HI THERE! ASK ME ABOUT 3D PRINTING."];
+            return res[Math.floor(Math.random() * res.length)];
+        }
+    },
+    {
+        patterns: ["how are you", "how are you doing", "how do you feel"],
+        action: () => {
+            const res = ["ALL SYSTEMS NOMINAL. MY EMOTION CHIP IS FUNCTIONING AT 100%.", "I AM OPERATING AT PEAK EFFICIENCY TODAY.", "I FEEL LIKE A BRAND NEW SPOOL OF PLA!"];
+            return res[Math.floor(Math.random() * res.length)];
+        }
+    },
+    {
+        patterns: ["who are you", "what is your name", "identify yourself"],
+        action: () => "I AM UNIBOT. I LIVE IN THE BROWSER AND MANAGE YOUR 3D PRINTING REQUESTS."
+    },
+    
+    // --- UNIFAB KNOWLEDGE ---
+    {
+        patterns: ["what is unifab", "explain unifab", "about unifab"],
+        topic: "UNIFAB_INFO",
+        action: () => "UNIFAB IS A 3D PRINTING SERVICE WEB APP FOR THE USTP-CDO FABRICATION LABORATORY. I HELP YOU GET QUOTES AND TRACK REQUESTS!"
+    },
+
+    // --- SYSTEM COMMANDS ---
+    {
+        patterns: ["what time is it", "current time", "tell me the time"],
+        action: () => {
+            const now = new Date();
+            const res = [
+                "THE CURRENT TIME IS " + now.toLocaleTimeString() + " IN MY LOCAL SERVER SYSTEM.",
+                "MY INTERNAL CLOCK SAYS IT IS " + now.toLocaleTimeString() + ".",
+                "CHECKING TIMESTAMPS... IT IS EXACTLY " + now.toLocaleTimeString() + "."
+            ];
+            return res[Math.floor(Math.random() * res.length)];
+        }
+    },
+    {
+        patterns: ["flip a coin", "coin toss", "heads or tails"],
+        topic: "COIN_TOSS",
+        action: () => {
+            const result = Math.random() > 0.5 ? "HEADS" : "TAILS";
+            applyEmotion('happy'); 
+            const res = [
+                "FLIPPING... IT IS " + result + "!",
+                "THE VIRTUAL COIN LANDS ON " + result + ".",
+                "CALCULATING PHYSICS SIMULATION... IT CAME UP " + result + "!",
+                "LUCKY " + result + "!"
+            ];
+            return res[Math.floor(Math.random() * res.length)];
+        }
+    },
+
+    // --- EASTER EGGS ---
+    {
+        patterns: ["do a barrel roll", "barrel roll", "spin"],
+        action: () => {
+            anime({ targets: robotWrapper, rotate: '+=360', duration: 1000, easing: 'easeInOutSine' });
+            applyEmotion('excited');
+            const res = ["WHEEEEEEEEEEE!", "DOING A BARREL ROLL!", "INITIATING EVASIVE MANEUVERS!", "ROTATING 360 DEGREES!"];
+            return res[Math.floor(Math.random() * res.length)];
+        }
+    },
+    {
+        patterns: ["tell me a joke", "make me laugh", "joke"],
+        topic: "JOKE",
+        action: () => {
+            applyEmotion('happy');
+            const jokes = ["WHY DO PROGRAMMERS PREFER DARK MODE? BECAUSE LIGHT ATTRACTS BUGS!", "THERE ARE 10 TYPES OF PEOPLE: THOSE WHO UNDERSTAND BINARY, AND THOSE WHO DON'T."];
+            return jokes[Math.floor(Math.random() * jokes.length)];
+        }
+    },
+    
+    // --- CONTEXTUAL AWARENESS (DOM AWARENESS) ---
+    {
+        patterns: ["what emotion are you feeling", "how do you feel right now", "are you angry", "are you happy", "current emotion"],
+        action: () => {
+            const activeBtn = document.querySelector('.emotion-active .text-xs');
+            if (activeBtn) {
+                return "MY SENSORS INDICATE I AM CURRENTLY FEELING " + activeBtn.innerText + ".";
+            }
+            return "I AM FEELING NEUTRAL.";
+        }
+    },
+    {
+        patterns: ["what color is the glow", "what is the glow color", "read the glow"],
+        action: () => {
+            const glow = document.getElementById('ambient-glow');
+            if (glow) {
+                const color = window.getComputedStyle(glow).backgroundColor;
+                return "MY SENSORS DETECT THE GLOW IS CURRENTLY SET TO " + color.toUpperCase() + "!";
+            }
+            return "I CANNOT DETECT A GLOW ELEMENT.";
+        }
+    },
+    {
+        patterns: ["what tab am i on", "where am i", "current tab"],
+        action: () => {
+            if (isPlaygroundMode) {
+                return "WE ARE CURRENTLY CHILLING IN THE PLAYGROUND TAB!";
+            } else {
+                return "YOU ARE CURRENTLY IN THE VISUALIZER TAB!";
+            }
+        }
+    },
+    {
+        patterns: ["change your color", "change color"],
+        action: () => {
+            const colors = ['#EF4444', '#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            const glow = document.getElementById('ambient-glow');
+            if (glow) glow.style.backgroundColor = randomColor;
+            return "COLOR PROTOCOL INITIATED. CHANGING AMBIENT GLOW!";
+        }
+    },
+
+    // --- PAGE NAVIGATION ---
+    {
+        patterns: ["go to visualizer", "switch to visualizer", "open visualizer"],
+        action: () => {
+            if (!isPlaygroundMode) return "WE ARE ALREADY IN THE VISUALIZER!";
+            navVisualizer.click();
+            return "NAVIGATING TO THE VISUALIZER...";
+        }
+    },
+    {
+        patterns: ["open upload menu", "switch to upload", "go to upload"],
+        action: () => {
+            if (isPlaygroundMode) navVisualizer.click();
+            return "THE UPLOAD MENU IS READY ON THE LEFT PANEL!";
+        }
+    },
+
+    // --- MINI GAMES ---
+    {
+        patterns: ["play rock paper scissors", "rock paper scissors", "rps"],
+        topic: "RPS_GAME",
+        action: () => {
+            applyEmotion('excited');
+            return "I AM READY! DO YOU CHOOSE ROCK, PAPER, OR SCISSORS?";
+        }
+    },
+
+    // --- COST CALCULATOR ---
+    {
+        patterns: ["calculate print cost", "how much for a print", "cost of a print", "price of a print"],
+        topic: "COST_CALC",
+        action: () => {
+            applyEmotion('happy');
+            return "I CAN ESTIMATE THAT FOR YOU! HOW MANY GRAMS IS YOUR 3D MODEL?";
+        }
+    },
+
+    // --- LIVE PUBLIC APIS ---
+    {
+        patterns: ["give me a cat fact", "cat fact", "tell me about cats"],
+        action: async () => {
+            try {
+                const response = await fetch('https://catfact.ninja/fact');
+                const data = await response.json();
+                return "MEOW! DID YOU KNOW: " + data.fact.toUpperCase();
+            } catch (e) {
+                return "MY CONNECTION TO THE FELINE DATABASE FAILED.";
+            }
+        }
+    },
+    {
+        patterns: ["give me some advice", "tell me advice", "i need advice", "advice"],
+        action: async () => {
+            try {
+                const response = await fetch('https://api.adviceslip.com/advice');
+                const data = await response.json();
+                return "WISDOM PROTOCOL: " + data.slip.advice.toUpperCase();
+            } catch (e) {
+                return "I CANNOT REACH THE ORACLE RIGHT NOW.";
+            }
+        }
+    }
+];
+
+// Initialize Fuse.js instance
+let fuseInstance = null;
+function initFuse() {
+    // 1. Build Global Dictionary
+    const fuseData = [];
+    unibotDictionary.forEach((item, index) => {
+        item.patterns.forEach(pattern => {
+            fuseData.push({ text: pattern, id: index });
+        });
+    });
+    
+    fuseInstance = new Fuse(fuseData, {
+        keys: ['text'],
+        threshold: 0.4,
+        includeScore: true
+    });
+
+    // 2. Build Context Dictionaries
+    for (const [topic, items] of Object.entries(contextDictionary)) {
+        const contextData = [];
+        items.forEach((item, index) => {
+            item.patterns.forEach(pattern => {
+                contextData.push({ text: pattern, id: index });
+            });
+        });
+        contextFuseInstances[topic] = new Fuse(contextData, {
+            keys: ['text'],
+            threshold: 0.4,
+            includeScore: true
+        });
+    }
+}
+
+async function getUnibotResponse(input) {
+    if (!fuseInstance) initFuse();
+    
+    const text = input.trim();
+    if (!text) return "";
+    
+    // 1. Exact Math Check
+    try {
+        if (/^[0-9+\-*\/\s()]+$/.test(text) && text.length > 2) {
+            currentConversationTopic = null;
+            const result = new Function('return ' + text)();
+            return text + " = " + result + ". EASY.";
+        }
+    } catch(e) {}
+    
+    // 2. Contextual Follow-up Search (If we have an active topic)
+    if (currentConversationTopic && contextFuseInstances[currentConversationTopic]) {
+        const contextResults = contextFuseInstances[currentConversationTopic].search(text);
+        if (contextResults.length > 0 && contextResults[0].score < 0.5) {
+            // Context matched! Execute context action. Keep current topic active.
+            const item = contextDictionary[currentConversationTopic][contextResults[0].item.id];
+            return await item.action(text);
+        }
+    }
+    
+    // 3. Global Fuzzy Search
+    const results = fuseInstance.search(text);
+    
+    if (results.length > 0 && results[0].score < 0.5) {
+        // We found a good global match!
+        const dictionaryItem = unibotDictionary[results[0].item.id];
+        
+        // Update context if this item triggers a new topic, else clear it.
+        currentConversationTopic = dictionaryItem.topic || null;
+        
+        return await dictionaryItem.action(text);
+    }
+    
+    // 4. Fallback
+    currentConversationTopic = null;
+    applyEmotion('confused'); 
+    return generateGibberish(15 + Math.floor(Math.random() * 10));
+}
+
+
+function showChatResponse(text) {
+    clearTimeout(chatTimeout);
+    chatText.innerHTML = '';
+    chatBubble.style.display = 'block';
+    
+    // Anime JS pop in (squash & stretch)
+    anime.remove(chatBubble);
+    anime({
+        targets: chatBubble,
+        scale: [0, 1.2, 0.9, 1],
+        opacity: [0, 1],
+        duration: 800,
+        easing: 'easeOutElastic(1, .6)'
+    });
+    
+    // Physical robot reaction
+    // Emotion is now handled in getUnibotResponse or handleChatSubmit to allow custom easter egg emotions!
+    
+    // Typewriter effect using Anime.js stagger
+    const chars = text.split('').map(char => `<span class="opacity-0 inline-block">${char === ' ' ? '&nbsp;' : char}</span>`).join('');
+    chatText.innerHTML = chars;
+    
+    anime({
+        targets: '#chat-bubble-text span',
+        opacity: 1,
+        duration: 50,
+        delay: anime.stagger(50),
+        easing: 'linear'
+    });
+    
+    // Hide bubble after reading time
+    chatTimeout = setTimeout(() => {
+        anime({
+            targets: chatBubble,
+            scale: 0,
+            opacity: 0,
+            duration: 300,
+            easing: 'easeInBack',
+            complete: () => {
+                chatBubble.style.display = 'none';
+            }
+        });
+    }, text.length * 50 + 3000);
+}
+
+const unibotThoughts = [
+    "I WONDER IF PRUSASLICER DREAMS OF G-CODE...",
+    "DO YOU HAVE ANY 3D MODELS TO PRINT?",
+    "MY FANS ARE SPINNING. IT IS WARM IN HERE.",
+    "BEEP BOOP. I AM READY FOR YOUR QUESTIONS.",
+    "DID YOU KNOW .3MF FILES ARE BETTER THAN .STL?",
+    "YOU CAN ASK ME TO FLIP A COIN!",
+    "I LOVE THE SMELL OF MELTED PLA IN THE MORNING.",
+    "HAVE YOU CHECKED OUT THE MYMINIFACTORY LIBRARY YET?",
+    "DO YOU WANT TO HEAR A JOKE?"
+];
+let thoughtTimer = null;
+function resetThoughtTimer() {
+    clearTimeout(thoughtTimer);
+    if (!isPlaygroundMode) return;
+    thoughtTimer = setTimeout(() => {
+        const thought = unibotThoughts[Math.floor(Math.random() * unibotThoughts.length)];
+        applyEmotion('happy');
+        showChatResponse(thought);
+        resetThoughtTimer();
+    }, 12000); // 12 seconds
+}
+
+async function handleChatSubmit() {
+    const val = chatInput.value.trim();
+    if (!val) return;
+    chatInput.value = '';
+    
+    resetThoughtTimer();
+    // Default fallback emotion before custom intent checks
+    applyEmotion('happy');
+    
+    // Show a typing indicator while waiting for API calls
+    chatBubble.style.display = 'block';
+    chatText.innerHTML = '<span class="animate-pulse">...</span>';
+    
+    try {
+        const msg = await getUnibotResponse(val);
+        showChatResponse(msg);
+    } catch(e) {
+        showChatResponse("MY NEURAL NET ENCOUNTERED AN ERROR: " + e.message);
+    }
+}
+
+chatBtn.addEventListener('click', handleChatSubmit);
+chatInput.addEventListener('keypress', (e) => {
+    resetThoughtTimer();
+    if (e.key === 'Enter') handleChatSubmit();
+});
+
+// DRAGGABLE PHYSICS & INTERACTIONS
+robotWrapper.style.cursor = 'grab';
+
+robotWrapper.addEventListener('mousedown', dragStart);
+robotWrapper.addEventListener('touchstart', dragStart, {passive: false});
+window.addEventListener('mousemove', dragMove);
+window.addEventListener('touchmove', dragMove, {passive: false});
+window.addEventListener('mouseup', dragEnd);
+window.addEventListener('touchend', dragEnd);
+
+function dragStart(e) {
+    if (!isPlaygroundMode) return;
+    isDragging = true;
+    isBored = false;
+    robotWrapper.style.cursor = 'grabbing';
+    
+    const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+    const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    
+    dragStartX = clientX;
+    dragStartY = clientY;
+    
+    // Lock current physical position into our tracker
+    dragStartPos.x = robotPos.x;
+    dragStartPos.y = robotPos.y;
+    
+    anime.remove(robotPos);
+    anime.remove(robotWrapper); // Stop scale/hopping anims
+    const face = document.querySelector('.current-layer');
+    if (face) anime.remove(face);
+    
+    applyEmotion('angry'); // Cozmo hates being picked up!
+    
+    clickCount++;
+    clearTimeout(clickTimeout);
+    clickTimeout = setTimeout(() => clickCount = 0, 400);
+    resetIdleDecay();
+}
+
+function dragMove(e) {
+    lastMouseX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+    lastMouseY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    
+    if (isPlaygroundMode) {
+        resetIdleDecay();
+        if (!isDragging) {
+            updateEyeTracking();
+        }
+    }
+    
+    if (!isDragging) return;
+    if (e.type.includes('touch')) e.preventDefault();
+    
+    const dx = lastMouseX - dragStartX;
+    const dy = lastMouseY - dragStartY;
+    
+    // Cozmo violent shake logic
+    const jitterX = (Math.random() - 0.5) * 12;
+    const jitterY = (Math.random() - 0.5) * 12;
+    
+    robotPos.x = dragStartPos.x + dx + jitterX;
+    robotPos.y = dragStartPos.y + dy + jitterY;
+    robotPos.rotate = (dx * 0.05 + jitterX*0.2);
+    robotPos.scaleX = 1;
+    robotPos.scaleY = 1;
+    
+    updateRobotTransform();
+}
+
+function dragEnd(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    robotWrapper.style.cursor = 'grab';
+    
+    const clientX = e.type.includes('mouse') ? e.clientX : e.changedTouches[0].clientX;
+    const clientY = e.type.includes('mouse') ? e.clientY : e.changedTouches[0].clientY;
+    
+    const dist = Math.sqrt(Math.pow(clientX - dragStartX, 2) + Math.pow(clientY - dragStartY, 2));
+    
+    if (dist < 10) {
+        if (clickCount >= 3) {
+            applyEmotion('annoyed');
+            clickCount = 0;
+        } else {
+            applyEmotion('happy_wave');
+        }
+        
+        anime({
+            targets: robotPos,
+            scaleX: [0.9, 1.1, 1],
+            scaleY: [0.9, 1.1, 1],
+            duration: 800,
+            easing: 'easeOutElastic(1, .6)',
+            update: () => updateRobotTransform()
+        });
+        
+        // Reset jitter to exact start pos
+        robotPos.x = dragStartPos.x;
+        robotPos.y = dragStartPos.y;
+        robotPos.rotate = 0;
+        updateRobotTransform();
+        return;
+    }
+    
+    // Cozmo is annoyed when dropped
+    applyEmotion('annoyed');
+    setTimeout(() => {
+        if (isPlaygroundMode && !isDragging) {
+            applyEmotion('neutral');
+            updateEyeTracking();
+        }
+    }, 1500);
+    
+    // 3-HOP CUTE BOUNCING TO CENTER (single timeline to avoid conflicts)
+    const startX = robotPos.x;
+    const startY = robotPos.y;
+    
+    const hopDuration = 250;
+    const halfHop = hopDuration * 0.5;
+    
+    // Kill any existing animations on robotPos first
+    anime.remove(robotPos);
+    
+    const tl = anime.timeline({
+        targets: robotPos,
+        update: () => updateRobotTransform()
+    });
+    
+    // Hop 1: current position -> 66% of the way back
+    tl.add({
+        x: startX * 0.66,
+        y: startY - 80,
+        rotate: (startX > 0 ? 8 : -8),
+        scaleX: 0.8,
+        scaleY: 1.2,
+        duration: halfHop,
+        easing: 'easeOutCubic'
+    })
+    .add({
+        x: startX * 0.66,
+        y: startY * 0.66,
+        rotate: 0,
+        scaleX: 1.3,
+        scaleY: 0.7,
+        duration: halfHop,
+        easing: 'easeInCubic'
+    })
+    // Hop 2: 66% -> 33% of the way back
+    .add({
+        x: startX * 0.33,
+        y: startY * 0.33 - 60,
+        rotate: (startX > 0 ? 6 : -6),
+        scaleX: 0.85,
+        scaleY: 1.15,
+        duration: halfHop,
+        easing: 'easeOutCubic'
+    })
+    .add({
+        x: startX * 0.33,
+        y: startY * 0.33,
+        rotate: 0,
+        scaleX: 1.2,
+        scaleY: 0.8,
+        duration: halfHop,
+        easing: 'easeInCubic'
+    })
+    // Hop 3: 33% -> center (0, 0)
+    .add({
+        x: 0,
+        y: -40,
+        rotate: (startX > 0 ? 4 : -4),
+        scaleX: 0.9,
+        scaleY: 1.1,
+        duration: halfHop,
+        easing: 'easeOutCubic'
+    })
+    .add({
+        x: 0,
+        y: 0,
+        rotate: 0,
+        scaleX: 1,
+        scaleY: 1,
+        duration: halfHop * 1.5,
+        easing: 'easeOutElastic(1, .5)'
+    });
+}
 </script>
 </body>
 </html>
